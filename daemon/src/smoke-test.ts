@@ -29,9 +29,7 @@ const TEST_PR = parseInt(process.env["PRISM_SMOKE_PR"] || "9530", 10);
 // ---- Pairing secret --------------------------------------------------------
 
 function readPairingSecret(): string {
-  const xdg = process.env["XDG_CONFIG_HOME"];
-  const base = xdg || path.join(os.homedir(), ".config");
-  const secretPath = path.join(base, "prism", "pairing-secret");
+  const secretPath = path.join(os.homedir(), ".config", "prism", "pairing-secret");
   try {
     return fs.readFileSync(secretPath, "utf-8").trim();
   } catch {

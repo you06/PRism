@@ -1,7 +1,7 @@
 // ---------------------------------------------------------------------------
 // PRism daemon — configuration loading
 //
-// Config dir follows XDG convention: $XDG_CONFIG_HOME/prism or ~/.config/prism
+// Config dir is fixed at ~/.config/prism
 // Config file: config.json
 // Pairing secret: pairing-secret (separate file, restricted permissions)
 // ---------------------------------------------------------------------------
@@ -20,11 +20,9 @@ export interface DaemonConfig {
 
 const DEFAULT_HOST = "127.0.0.1";
 
-/** Return the PRism config directory, creating it if necessary. */
+/** Return the PRism config directory (~/.config/prism), creating it if necessary. */
 export function getConfigDir(): string {
-  const xdg = process.env["XDG_CONFIG_HOME"];
-  const base = xdg || path.join(os.homedir(), ".config");
-  const dir = path.join(base, "prism");
+  const dir = path.join(os.homedir(), ".config", "prism");
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   return dir;
 }

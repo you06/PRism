@@ -461,3 +461,43 @@ daemon 直接通过 GitHub API / raw diff 拉：
 - 能在 hunk 附近显示 summary card
 - PR 更新后（`headSha` 变化）不会错贴旧结果
 - daemon 不在线时，extension 能优雅降级并提示
+
+## 18. 工程结构与运行入口
+
+### 18.1 Repo 结构
+```text
+PRism/
+  DESIGN.md
+  README.md
+  extension/
+  daemon/
+  shared/
+  work/
+```
+
+| 路径 | 作用 |
+|------|------|
+| `extension/` | Chrome/Chromium extension：content script、background service worker、inline UI |
+| `daemon/` | localhost HTTP daemon：GitHub fetch、analysis pipeline、SQLite cache |
+| `shared/` | extension / daemon 共用的 contracts、models、hash 逻辑 |
+| `work/` | 规划、fixtures、QA checklist、任务拆分 |
+
+### 18.2 运行入口
+| 文件 | 角色 | 说明 |
+|------|------|------|
+| `extension/manifest.json` | Extension manifest | 定义 content script、background、权限边界 |
+| `extension/src/content.ts` | 页面侧入口 | PR 页面检测、hunk 提取、卡片渲染 |
+| `extension/src/background.ts` | 扩展后端入口 | localhost API gateway、请求去重、缓存、job polling |
+| `daemon/src/index.ts` | Daemon 入口 | HTTP server、鉴权、路由装配、store 初始化 |
+| `daemon/src/smoke-test.ts` | 操作验证入口 | 用真实 public PR 跑一遍 daemon API smoke test |
+
+### 18.3 运行时文件
+PRism 的运行时文件统一放在：
+- `~/.config/prism/config.json`
+- `~/.config/prism/pairing-secret`
+- `~/.config/prism/prism.db`
+
+其中：
+- `config.json` 用于 daemon 配置覆盖
+- `pairing-secret` 用于 extension → daemon 鉴权
+- `prism.db` 是 SQLite 持久化缓存 / job store
