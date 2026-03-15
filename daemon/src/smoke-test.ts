@@ -3,7 +3,7 @@
 // PRism daemon — smoke test
 //
 // Exercises the daemon HTTP API end-to-end against a real public GitHub PR.
-// Requires a running daemon instance with a valid GITHUB_TOKEN configured.
+// Requires a running daemon instance with `gh auth login` already completed.
 //
 // Usage:
 //   pnpm --filter @prism/daemon smoke-test
@@ -310,7 +310,7 @@ async function main(): Promise<void> {
   // Step 2: Register PR
   const reg = await stepRegisterPR();
   if (!reg.ok) {
-    console.log("\nPR registration failed. Check GITHUB_TOKEN and PR accessibility.");
+    console.log("\nPR registration failed. Check `gh auth login` and PR accessibility.");
     printSummary();
     return;
   }

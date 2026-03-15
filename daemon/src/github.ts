@@ -2,7 +2,7 @@
 // PRism daemon — GitHub API adapter (WORK09)
 //
 // Fetches PR metadata, changed files, and file content from GitHub.
-// Auth: GITHUB_TOKEN / GH_TOKEN env var, or `gh auth token` fallback.
+// Auth: authenticated `gh` CLI only (`gh auth token`).
 // ---------------------------------------------------------------------------
 
 import { execSync } from "node:child_process";
@@ -52,21 +52,13 @@ export class GitHubError extends Error {
 let cachedToken: string | undefined;
 
 /**
- * Resolve a GitHub token. Priority:
- *   1. GITHUB_TOKEN or GH_TOKEN env var
- *   2. `gh auth token` CLI output
+ * Resolve a GitHub token from authenticated `gh` CLI only.
  *
  * Caches the result for the lifetime of the process.
- * Throws GitHubError("token_missing") if neither source provides a token.
+ * Throws GitHubError("token_missing") if `gh auth token` cannot provide a token.
  */
 export function resolveToken(): string {
   if (cachedToken) return cachedToken;
-
-  const envToken = process.env["GITHUB_TOKEN"] || process.env["GH_TOKEN"];
-  if (envToken) {
-    cachedToken = envToken;
-    return cachedToken;
-  }
 
   try {
     const token = execSync("gh auth token", {
@@ -84,7 +76,7 @@ export function resolveToken(): string {
 
   throw new GitHubError(
     "token_missing",
-    "GitHub token not found. Set GITHUB_TOKEN env var or run `gh auth login`.",
+    "GitHub auth not found. Run `gh auth login` before starting PRism.",
   );
 }
 
@@ -138,7 +130,7 @@ async function ghFetch(path: string, token: string): Promise<Response> {
       clearTokenCache();
       throw new GitHubError(
         "token_expired",
-        "GitHub token is invalid or expired. Re-run `gh auth login` or update GITHUB_TOKEN.",
+        "GitHub auth is invalid or expired. Re-run `gh auth login`.",
         403,
       );
     }
@@ -150,7 +142,7 @@ async function ghFetch(path: string, token: string): Promise<Response> {
     clearTokenCache();
     throw new GitHubError(
       "token_expired",
-      "GitHub token is invalid or expired. Re-run `gh auth login` or update GITHUB_TOKEN.",
+      "GitHub auth is invalid or expired. Re-run `gh auth login`.",
       401,
     );
   }

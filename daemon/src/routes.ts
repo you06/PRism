@@ -526,10 +526,17 @@ function handleGitHubError(
         ? { retryAfterSec: err.retryAfter }
         : undefined;
 
+    const code =
+      err.kind === "token_missing"
+        ? "GITHUB_AUTH_MISSING"
+        : err.kind === "token_expired"
+          ? "GITHUB_AUTH_EXPIRED"
+          : `GITHUB_${err.kind.toUpperCase()}`;
+
     return apiError(
       res,
       statusCode,
-      `GITHUB_${err.kind.toUpperCase()}`,
+      code,
       err.message,
       details,
     );

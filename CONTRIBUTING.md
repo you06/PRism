@@ -11,7 +11,7 @@ If you want architecture details, use [DESIGN.md](./DESIGN.md).
 - Node.js >= 20
 - pnpm >= 9
 - Chrome / Chromium
-- GitHub auth via `gh auth login` or `GITHUB_TOKEN` / `GH_TOKEN`
+- Authenticated GitHub CLI: `gh auth login`
 
 ### Install
 
@@ -140,7 +140,6 @@ cat ~/.config/prism/pairing-secret
 
 - **GitHub auth issues**
   - Run `gh auth login`
-  - Or export `GITHUB_TOKEN`
 
 - **Extension not injecting**
   - Rebuild the extension

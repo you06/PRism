@@ -100,7 +100,7 @@ V1 先把设计和 work breakdown 定下来；真正实现时，`shared/` 放 co
 
 ### 6.3 Local Daemon
 - 只绑定 `127.0.0.1`
-- 保管 GitHub token / `gh auth token` 读取逻辑
+- 依赖已认证的 `gh` CLI（通过 `gh auth token` 读取认证）
 - 拉取 PR files / patches / raw diff / file contents
 - 规范化 hunk key
 - 调度 LLM / coding agent 分析

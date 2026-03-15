@@ -64,10 +64,7 @@ You should see PRism cards appear next to diff hunks.
 - Node.js >= 20
 - pnpm >= 9
 - Chrome / Chromium
-- GitHub auth via one of:
-  - `gh auth login`
-  - `GITHUB_TOKEN`
-  - `GH_TOKEN`
+- Authenticated GitHub CLI: `gh auth login`
 
 ## Smoke test
 
@@ -96,7 +93,6 @@ pnpm --filter @prism/daemon smoke-test
 
 - **GitHub auth error**
   - Run `gh auth login`
-  - Or set `GITHUB_TOKEN`
   - Restart the daemon
 
 ## More docs
