@@ -1,0 +1,9 @@
+# Local-only planning workspace
+work/
+
+# Dependencies & build output
+node_modules/
+dist/
+
+# pnpm
+.pnpm-store/

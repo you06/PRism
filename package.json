@@ -1,0 +1,20 @@
+{
+  "name": "prism",
+  "private": true,
+  "version": "0.1.0",
+  "description": "GitHub code review assistant \u2014 AI-generated hunk summaries on PR Changes pages",
+  "scripts": {
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "clean": "pnpm -r run clean"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

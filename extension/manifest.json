@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "PRism",
+  "version": "0.1.0",
+  "description": "Personal AI code review assistant for GitHub PRs",
+
+  "permissions": [
+    "storage"
+  ],
+
+  "host_permissions": [
+    "http://127.0.0.1/*"
+  ],
+
+  "background": {
+    "service_worker": "dist/background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*/pull/*/files*"],
+      "js": ["dist/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
