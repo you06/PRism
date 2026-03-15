@@ -53,6 +53,9 @@ pnpm typecheck        # runs tsc --noEmit across all packages
 | `daemon/src/routes.ts` | HTTP API route handlers |
 | `daemon/src/github.ts` | GitHub API adapter |
 | `daemon/src/store.ts` | In-memory store interfaces and implementations |
+| `daemon/src/analysis/agent-analyzer.ts` | LLM analysis via codex/claude CLI |
+| `daemon/src/analysis/prompt.ts` | Prompt template loading and formatting |
+| `daemon/prompts/review.md` | Prompt template for batch PR review |
 | `extension/src/content.ts` | Content script injected into GitHub PR pages |
 | `extension/src/background.ts` | Background service worker |
 | `shared/src/contracts.ts` | API contracts and message types |

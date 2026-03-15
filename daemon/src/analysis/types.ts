@@ -73,3 +73,54 @@ export interface HunkAnalyzer {
    */
   analyze(input: AnalysisInput): Promise<AnalyzerResult>;
 }
+
+// ---- Batch PR analysis types (WORK20) ---------------------------------------
+
+/** A single code change fragment within a PR. */
+export interface PRFragment {
+  /** Fragment index (string), e.g. "1", "2", "3". */
+  index: string;
+  /** File path of the changed file. */
+  filePath: string;
+  /** The @@ hunk header line. */
+  hunkHeader: string;
+  /** Raw unified-diff patch text. */
+  patch: string;
+}
+
+/** Input for batch PR-level analysis — all fragments at once. */
+export interface PRAnalysisInput {
+  /** PR title (may be empty). */
+  prTitle: string;
+  /** PR description / body (may be empty). */
+  prDescription: string;
+  /** All code change fragments in this PR. */
+  fragments: PRFragment[];
+}
+
+/** Batch output: fragment index → summary. */
+export type PRAnalysisOutput = Record<string, SummaryOutput>;
+
+/**
+ * Result wrapper for PR-level batch analysis.
+ *
+ * `ok: true`  → output contains summaries keyed by fragment index.
+ * `ok: false` → analysis failed; `error` explains why.
+ */
+export type PRAnalysisResult =
+  | { ok: true; output: PRAnalysisOutput; model: string }
+  | { ok: false; error: string; model: string };
+
+/**
+ * Pluggable analyzer interface for batch PR-level analysis.
+ *
+ * Unlike HunkAnalyzer (one hunk at a time), PRAnalyzer processes all
+ * fragments in a single call.
+ */
+export interface PRAnalyzer {
+  /** Human-readable name shown in logs and annotation metadata. */
+  readonly name: string;
+
+  /** Analyze all fragments in a PR and return structured summaries. */
+  analyzePR(input: PRAnalysisInput): Promise<PRAnalysisResult>;
+}

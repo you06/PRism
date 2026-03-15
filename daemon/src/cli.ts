@@ -3,14 +3,33 @@
 // PRism CLI — `prism review <pr>` / `prism server`
 //
 // WORK18: CLI entry point for launching the daemon and triggering PR analysis.
+// WORK22: Agent-based analysis integration with gh pr checkout.
 // ---------------------------------------------------------------------------
 
 import { execSync } from "node:child_process";
-import type { PRKey } from "@prism/shared";
+import { randomUUID } from "node:crypto";
+import type { PRKey, Annotation } from "@prism/shared";
 import { createDaemon, startDaemon } from "./server.js";
-import { ensureRegistered, createAndStartJob } from "./routes.js";
+import { ensureRegistered } from "./routes.js";
+import { AgentAnalyzer } from "./analysis/agent-analyzer.js";
+import type { AgentType } from "./analysis/agent-analyzer.js";
+import type { PRAnalysisInput, PRFragment } from "./analysis/types.js";
+import type { CanonicalHunk } from "./hunk-canonicalizer.js";
 
-// ---- Git remote parsing ----------------------------------------------------
+// ---- Git helpers -----------------------------------------------------------
+
+function isInsideGitRepo(): boolean {
+  try {
+    const result = execSync("git rev-parse --is-inside-work-tree", {
+      encoding: "utf-8",
+      timeout: 5_000,
+      stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+    return result === "true";
+  } catch {
+    return false;
+  }
+}
 
 function inferOwnerRepo(): { owner: string; repo: string } {
   let url: string;
@@ -55,8 +74,8 @@ function openBrowser(url: string): void {
 
 function printUsage(): void {
   console.log("Usage:");
-  console.log("  prism review <pr_number>              — review PR from current git repo");
-  console.log("  prism review owner/repo#<pr_number>   — review PR from specified repo");
+  console.log("  prism review <pr_number> [--agent codex|claude] [--model <model>]");
+  console.log("  prism review owner/repo#<pr_number> [--agent codex|claude] [--model <model>]");
   console.log("  prism server                          — start daemon only");
   process.exit(1);
 }
@@ -65,9 +84,11 @@ interface ReviewArgs {
   owner: string;
   repo: string;
   pullNumber: number;
+  agent: AgentType;
+  model?: string;
 }
 
-function parseReviewTarget(target: string): ReviewArgs {
+function parseReviewTarget(target: string): { owner: string; repo: string; pullNumber: number } {
   // owner/repo#123
   const explicitMatch = target.match(/^([^/]+)\/([^#]+)#(\d+)$/);
   if (explicitMatch) {
@@ -89,6 +110,58 @@ function parseReviewTarget(target: string): ReviewArgs {
   process.exit(1);
 }
 
+function parseReviewArgs(args: string[]): ReviewArgs {
+  if (!args[0]) {
+    console.error("Error: missing PR number.");
+    printUsage();
+    process.exit(1); // unreachable but satisfies TS
+  }
+
+  const { owner, repo, pullNumber } = parseReviewTarget(args[0]);
+  let agent: AgentType = "codex";
+  let model: string | undefined;
+
+  // Parse optional flags from args[1..]
+  let i = 1;
+  while (i < args.length) {
+    if (args[i] === "--agent" && i + 1 < args.length) {
+      const val = args[i + 1];
+      if (val !== "codex" && val !== "claude") {
+        console.error(`Error: --agent must be "codex" or "claude", got "${val}".`);
+        process.exit(1);
+      }
+      agent = val;
+      i += 2;
+    } else if (args[i] === "--model" && i + 1 < args.length) {
+      model = args[i + 1];
+      i += 2;
+    } else {
+      console.error(`Error: unknown flag "${args[i]}".`);
+      printUsage();
+    }
+  }
+
+  return { owner, repo, pullNumber, agent, model };
+}
+
+// ---- Hunk → fragment conversion --------------------------------------------
+
+function buildFragments(hunks: CanonicalHunk[]): PRFragment[] {
+  return hunks.map((hunk, idx) => {
+    // Reconstruct patch text from normalized lines
+    const patchLines = hunk.lines.map((line) => {
+      const prefix = line.type === "add" ? "+" : line.type === "delete" ? "-" : " ";
+      return prefix + line.content;
+    });
+    return {
+      index: String(idx + 1),
+      filePath: hunk.filePath,
+      hunkHeader: hunk.hunkHeader,
+      patch: patchLines.join("\n"),
+    };
+  });
+}
+
 // ---- Main ------------------------------------------------------------------
 
 async function main(): Promise<void> {
@@ -107,20 +180,34 @@ async function main(): Promise<void> {
   }
 
   if (command === "review") {
-    if (!args[1]) {
-      console.error("Error: missing PR number.");
-      printUsage();
-      return; // unreachable but satisfies TS
+    const reviewArgs = parseReviewArgs(args.slice(1));
+    const { owner, repo, pullNumber, agent, model } = reviewArgs;
+
+    // Step a: Check we're in a git repo
+    if (!isInsideGitRepo()) {
+      console.error("Error: not inside a git repository.");
+      process.exit(1);
     }
 
-    const { owner, repo, pullNumber } = parseReviewTarget(args[1]);
-    console.log(`Reviewing ${owner}/${repo}#${pullNumber}...`);
+    // Step c: Checkout PR
+    console.log(`Checking out PR #${pullNumber}...`);
+    try {
+      execSync(`gh pr checkout ${pullNumber}`, {
+        encoding: "utf-8",
+        timeout: 30_000,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch (err) {
+      console.error(`Error: failed to checkout PR #${pullNumber}.`);
+      console.error(err instanceof Error ? err.message : String(err));
+      process.exit(1);
+    }
 
-    // Start daemon
+    // Step d: Start daemon
     const daemon = createDaemon();
     await startDaemon(daemon);
 
-    // Preregister PR via internal function calls (same process)
+    // Step e: Pre-register PR (fetches metadata + canonical hunks)
     const prKey: PRKey = {
       host: "github.com",
       owner,
@@ -134,26 +221,64 @@ async function main(): Promise<void> {
     const registered = await ensureRegistered(prKey, daemon.ctx);
     console.log(`  registered: ${registered.prId} (${registered.fileCount} files)`);
 
-    // Trigger full analysis (scope: "all")
-    const targets = registered.canonicalHunks.map((h) => ({
-      filePath: h.filePath,
-      patchHash: h.patchHash,
-    }));
+    const hunks = registered.canonicalHunks;
+    const prUrl = `https://github.com/${owner}/${repo}/pull/${pullNumber}/files`;
 
-    if (targets.length > 0) {
-      console.log(`  starting analysis of ${targets.length} hunks...`);
-      await createAndStartJob(
-        registered.prKey,
-        "all",
-        targets,
-        daemon.ctx,
-        false,
-      );
+    if (hunks.length === 0) {
+      console.log("  no hunks to analyze.");
+      console.log("Opening browser...");
+      openBrowser(prUrl);
+      return;
     }
 
-    // Open browser to PR files page
-    const prUrl = `https://github.com/${owner}/${repo}/pull/${pullNumber}/files`;
-    console.log(`  opening ${prUrl}`);
+    // Step f: Build PRAnalysisInput from canonical hunks
+    const fragments = buildFragments(hunks);
+    const input: PRAnalysisInput = {
+      prTitle: registered.metadata.title,
+      prDescription: registered.metadata.body,
+      fragments,
+    };
+
+    // Step g: Run agent analysis
+    console.log(`Analyzing ${hunks.length} hunks with ${agent}...`);
+    const analyzer = new AgentAnalyzer({ agent, model });
+    const result = await analyzer.analyzePR(input);
+
+    if (result.ok) {
+      // Step h: Convert output to Annotations and store
+      let annotated = 0;
+      for (const fragment of fragments) {
+        const summary = result.output[fragment.index];
+        if (!summary) continue;
+
+        const hunk = hunks[parseInt(fragment.index, 10) - 1];
+        const annotation: Annotation = {
+          annotationId: "ann_" + randomUUID(),
+          prKey: registered.prKey,
+          filePath: hunk.filePath,
+          patchHash: hunk.patchHash,
+          summary: summary.summary,
+          impact: summary.impact,
+          risk: summary.risk,
+          confidence: summary.confidence,
+          model: result.model,
+          status: "ready",
+          generatedAt: new Date().toISOString(),
+        };
+
+        daemon.ctx.annotations.set(registered.prKey.headSha, annotation);
+        annotated++;
+      }
+
+      console.log(`Analysis complete: ${annotated}/${hunks.length} hunks annotated.`);
+    } else {
+      // Step k: Degraded mode
+      console.warn(`Warning: agent analysis failed: ${result.error}`);
+      console.warn("Starting in degraded mode — annotations will be generated on demand.");
+    }
+
+    // Step j: Open browser
+    console.log("Opening browser...");
     openBrowser(prUrl);
 
     return;

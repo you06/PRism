@@ -16,12 +16,14 @@ pnpm install && pnpm build          # build shared types first
 cd daemon && bun build src/cli.ts --compile --outfile ../prism
 ```
 
-Then use it:
+Then use it (run inside a git repo):
 
 ```bash
-./prism server                       # start daemon only
-./prism review 42                    # review PR #42 from current repo
-./prism review owner/repo#42         # review PR from any repo
+./prism review 42                    # review PR #42 (default: codex)
+./prism review 42 --agent claude     # use claude instead
+./prism review 42 --model gpt-4.1   # specify model
+./prism review owner/repo#42        # review PR from any repo
+./prism server                       # start daemon only (no analysis)
 ```
 
 ### Option B: Run from source
@@ -82,6 +84,9 @@ You should see PRism cards appear next to diff hunks.
 - pnpm >= 9
 - Chrome / Chromium
 - Authenticated GitHub CLI: `gh auth login`
+- One of the following analysis agents:
+  - [Codex CLI](https://github.com/openai/codex) (default)
+  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (`--agent claude`)
 
 ## Smoke test
 

@@ -8,13 +8,22 @@ export type {
   AnalyzerResult,
   HunkAnalyzer,
   SummaryOutput,
+  PRFragment,
+  PRAnalysisInput,
+  PRAnalysisOutput,
+  PRAnalysisResult,
+  PRAnalyzer,
 } from "./types.js";
 
-// Prompt template
-export { SYSTEM_PROMPT, buildUserPrompt } from "./prompt.js";
+// Prompt templates
+export { SYSTEM_PROMPT, buildUserPrompt, buildPRReviewPrompt } from "./prompt.js";
 
 // Heuristic analyzer (default)
 export { HeuristicAnalyzer, HEURISTIC_MODEL_NAME } from "./heuristic-analyzer.js";
+
+// Agent-based analyzer (codex / claude CLI)
+export { AgentAnalyzer } from "./agent-analyzer.js";
+export type { AgentType, AgentAnalyzerOptions } from "./agent-analyzer.js";
 
 // Pipeline orchestrator
 export {

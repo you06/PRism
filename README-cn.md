@@ -16,12 +16,14 @@ pnpm install && pnpm build          # 先构建 shared types
 cd daemon && bun build src/cli.ts --compile --outfile ../prism
 ```
 
-然后使用：
+然后使用（在 git 仓库中运行）：
 
 ```bash
-./prism server                       # 仅启动 daemon
-./prism review 42                    # review 当前仓库的 PR #42
-./prism review owner/repo#42         # review 指定仓库的 PR
+./prism review 42                    # review PR #42（默认使用 codex）
+./prism review 42 --agent claude     # 使用 claude
+./prism review 42 --model gpt-4.1   # 指定模型
+./prism review owner/repo#42        # review 指定仓库的 PR
+./prism server                       # 仅启动 daemon（不分析）
 ```
 
 ### 方式 B：从源码运行
@@ -82,6 +84,9 @@ https://github.com/<owner>/<repo>/pull/<number>/files
 - pnpm >= 9
 - Chrome / Chromium
 - 已认证的 GitHub CLI：`gh auth login`
+- 以下分析 agent 之一：
+  - [Codex CLI](https://github.com/openai/codex)（默认）
+  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code)（`--agent claude`）
 
 ## Smoke test
 
