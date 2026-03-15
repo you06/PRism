@@ -9,6 +9,25 @@ It shows AI-generated summaries next to code diffs on GitHub PR **Files changed*
 
 ## 3-minute quick start
 
+### Option A: Single binary (recommended)
+
+Build a self-contained `prism` binary with [Bun](https://bun.sh):
+
+```bash
+pnpm install && pnpm build          # build shared types first
+cd daemon && bun build src/cli.ts --compile --outfile ../prism
+```
+
+Then use it:
+
+```bash
+./prism server                       # start daemon only
+./prism review 42                    # review PR #42 from current repo
+./prism review owner/repo#42         # review PR from any repo
+```
+
+### Option B: Run from source
+
 ### 1) Install
 
 ```bash

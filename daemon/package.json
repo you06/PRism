@@ -4,13 +4,17 @@
   "private": true,
   "type": "module",
   "main": "dist/index.js",
+  "bin": {
+    "prism": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
-    "smoke-test": "tsx src/smoke-test.ts"
+    "smoke-test": "tsx src/smoke-test.ts",
+    "build:bin": "bun build src/cli.ts --compile --outfile ../prism"
   },
   "dependencies": {
     "@prism/shared": "workspace:*"

@@ -7,3 +7,6 @@ dist/
 
 # pnpm
 .pnpm-store/
+
+# Compiled binary
+prism

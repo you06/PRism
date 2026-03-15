@@ -112,7 +112,7 @@ function makeJobId(): string {
 
 // ---- Ensure PR is registered (lazy fetch from GitHub) -----------------------
 
-async function ensureRegistered(
+export async function ensureRegistered(
   pr: PRKey,
   ctx: RouteContext,
 ): Promise<RegisteredPR> {
@@ -386,7 +386,7 @@ export function handleGetAnnotations(
 
 // ---- Job creation & background processing -----------------------------------
 
-async function createAndStartJob(
+export async function createAndStartJob(
   pr: PRKey,
   scope: string,
   targets: Array<{ filePath: string; patchHash: string }>,
