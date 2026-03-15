@@ -1,0 +1,118 @@
+# PRism
+
+[English](./README.md)
+
+PRism 是一个个人 GitHub code review 助手。
+它在 GitHub PR **Files changed** 页面的代码 diff 旁边显示 AI 生成的摘要。
+
+## 3 分钟快速开始
+
+### 方式 A：单文件二进制（推荐）
+
+用 [Bun](https://bun.sh) 构建独立的 `prism` 二进制：
+
+```bash
+pnpm install && pnpm build          # 先构建 shared types
+cd daemon && bun build src/cli.ts --compile --outfile ../prism
+```
+
+然后使用：
+
+```bash
+./prism server                       # 仅启动 daemon
+./prism review 42                    # review 当前仓库的 PR #42
+./prism review owner/repo#42         # review 指定仓库的 PR
+```
+
+### 方式 B：从源码运行
+
+### 1) 安装
+
+```bash
+pnpm install
+pnpm build
+```
+
+### 2) 启动 daemon
+
+```bash
+pnpm --filter @prism/daemon dev
+```
+
+健康检查：
+
+```bash
+curl http://127.0.0.1:19280/v1/health
+```
+
+### 3) 加载扩展
+
+1. 打开 `chrome://extensions`
+2. 开启 **开发者模式**
+3. 点击 **加载已解压的扩展程序**
+4. 选择 `extension/` 目录
+
+### 4) 将配对密钥复制到扩展中
+
+读取 token：
+
+```bash
+cat ~/.config/prism/pairing-secret
+```
+
+然后在 `chrome://extensions` 中打开 PRism service worker 控制台，运行：
+
+```js
+chrome.storage.local.set({ pairingToken: "<粘贴密钥>" });
+```
+
+### 5) 使用
+
+打开任意 GitHub PR **Files changed** 页面：
+
+```text
+https://github.com/<owner>/<repo>/pull/<number>/files
+```
+
+你应该能看到 PRism 卡片出现在 diff hunk 旁边。
+
+## 前置要求
+
+- Node.js >= 20
+- pnpm >= 9
+- Chrome / Chromium
+- 已认证的 GitHub CLI：`gh auth login`
+
+## Smoke test
+
+```bash
+# 终端 1
+pnpm --filter @prism/daemon dev
+
+# 终端 2
+pnpm --filter @prism/daemon smoke-test
+```
+
+## 问题排查
+
+- **没有卡片出现**
+  - 重新构建：`pnpm --filter @prism/extension build`
+  - 在 `chrome://extensions` 中重新加载扩展
+  - 确认你在 `.../pull/<n>/files` 页面上
+
+- **Daemon 离线**
+  - 启动：`pnpm --filter @prism/daemon dev`
+  - 检查：`curl http://127.0.0.1:19280/v1/health`
+
+- **配对 token 无效**
+  - 重新复制：`cat ~/.config/prism/pairing-secret`
+  - 在 `chrome.storage.local` 中重新设置
+
+- **GitHub 认证错误**
+  - 运行 `gh auth login`
+  - 重启 daemon
+
+## 更多文档
+
+- 开发设置 / 脚本 / 测试数据 / QA：[CONTRIBUTING.md](./CONTRIBUTING.md)
+- 设计 / 架构：[DESIGN.md](./DESIGN.md)

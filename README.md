@@ -1,11 +1,9 @@
 # PRism
 
+[中文文档](./README-cn.md)
+
 PRism is a personal GitHub code review assistant.
 It shows AI-generated summaries next to code diffs on GitHub PR **Files changed** pages.
-
-- Want to **use** PRism? Start here.
-- Want to **develop** PRism? See [CONTRIBUTING.md](./CONTRIBUTING.md).
-- Want the **architecture / design**? See [DESIGN.md](./DESIGN.md).
 
 ## 3-minute quick start
 
