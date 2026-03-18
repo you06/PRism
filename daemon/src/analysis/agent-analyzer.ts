@@ -14,6 +14,8 @@ import type {
 } from "./types.js";
 import { buildPRReviewPrompt } from "./prompt.js";
 
+const MAX_PROMPT_BYTES = 100_000; // ~100KB, safe for most CLIs
+
 // ---- Public types -----------------------------------------------------------
 
 export type AgentType = "codex" | "claude";
@@ -152,6 +154,63 @@ export class AgentAnalyzer implements PRAnalyzer {
 
     const { system, user } = buildPRReviewPrompt(input, this.language);
     const fullPrompt = `${system}\n\n${user}`;
+
+    if (Buffer.byteLength(fullPrompt, "utf-8") <= MAX_PROMPT_BYTES) {
+      // Single batch — fits within limits
+      return this.invokeSingleBatch(input, fullPrompt, modelLabel);
+    }
+
+    // Prompt too large — split into multiple batches
+    const chunks = this.splitIntoChunks(input, this.language);
+    const merged: PRAnalysisOutput = {} as PRAnalysisOutput;
+    const errors: string[] = [];
+    let anySuccess = false;
+
+    for (const chunk of chunks) {
+      const { system: cSys, user: cUsr } = buildPRReviewPrompt(
+        chunk,
+        this.language,
+      );
+      const chunkPrompt = `${cSys}\n\n${cUsr}`;
+      const chunkKeys = chunk.fragments.map((f) => f.index);
+      const result = await this.invokeSingleBatch(
+        chunk,
+        chunkPrompt,
+        modelLabel,
+      );
+
+      if (result.ok) {
+        anySuccess = true;
+        // Only merge keys that belong to this chunk
+        for (const key of chunkKeys) {
+          if (key in result.output) {
+            (merged as Record<string, unknown>)[key] = (
+              result.output as Record<string, unknown>
+            )[key];
+          }
+        }
+      } else {
+        errors.push(result.error ?? "unknown chunk error");
+      }
+    }
+
+    if (!anySuccess) {
+      return {
+        ok: false,
+        error: `All ${chunks.length} chunks failed: ${errors.join("; ")}`,
+        model: modelLabel,
+      };
+    }
+
+    return { ok: true, output: merged, model: modelLabel };
+  }
+
+  private async invokeSingleBatch(
+    input: PRAnalysisInput,
+    fullPrompt: string,
+    modelLabel: string,
+  ): Promise<PRAnalysisResult> {
+    const bin = this.agent === "codex" ? "codex" : "claude";
     const expectedKeys = input.fragments.map((f) => f.index);
 
     // Try up to 2 times (initial + 1 retry on invalid JSON)
@@ -189,6 +248,34 @@ export class AgentAnalyzer implements PRAnalyzer {
 
     // Unreachable, but TypeScript needs it
     return { ok: false, error: "Unexpected retry exhaustion", model: modelLabel };
+  }
+
+  private splitIntoChunks(
+    input: PRAnalysisInput,
+    language: string,
+  ): PRAnalysisInput[] {
+    const chunks: PRAnalysisInput[] = [];
+    let currentFragments: typeof input.fragments = [];
+
+    for (const fragment of input.fragments) {
+      currentFragments.push(fragment);
+      const testInput = { ...input, fragments: currentFragments };
+      const { system, user } = buildPRReviewPrompt(testInput, language);
+      if (
+        Buffer.byteLength(system + "\n\n" + user, "utf-8") >
+          MAX_PROMPT_BYTES &&
+        currentFragments.length > 1
+      ) {
+        // Remove last fragment, save chunk, start new chunk
+        currentFragments.pop();
+        chunks.push({ ...input, fragments: [...currentFragments] });
+        currentFragments = [fragment];
+      }
+    }
+    if (currentFragments.length > 0) {
+      chunks.push({ ...input, fragments: currentFragments });
+    }
+    return chunks;
   }
 
   private async invoke(

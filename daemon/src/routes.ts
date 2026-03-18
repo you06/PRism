@@ -110,6 +110,19 @@ function makeJobId(): string {
   return `job_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
+async function runWithConcurrency<T>(tasks: Array<() => Promise<T>>, limit: number): Promise<T[]> {
+  const results: T[] = [];
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < tasks.length) {
+      const i = nextIndex++;
+      results[i] = await tasks[i]();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()));
+  return results;
+}
+
 function resolveCanonicalHunk(
   registered: RegisteredPR,
   hunk: HunkRef,
@@ -479,7 +492,7 @@ async function processJob(
   let completed = 0;
   let failed = 0;
 
-  for (const target of targets) {
+  const tasks = targets.map((target) => async () => {
     // Skip if we already have a ready annotation (unless force)
     if (!force) {
       const existing = ctx.annotations.get(
@@ -490,7 +503,7 @@ async function processJob(
       if (existing && existing.status === "ready") {
         completed++;
         ctx.jobs.update(jobId, { completed });
-        continue;
+        return;
       }
     }
 
@@ -501,7 +514,7 @@ async function processJob(
     if (!canonical) {
       failed++;
       ctx.jobs.update(jobId, { failed });
-      continue;
+      return;
     }
 
     try {
@@ -522,7 +535,9 @@ async function processJob(
     }
 
     ctx.jobs.update(jobId, { completed, failed });
-  }
+  });
+
+  await runWithConcurrency(tasks, 5);
 
   ctx.jobs.update(jobId, {
     status: failed === targets.length ? "failed" : "completed",

@@ -48,7 +48,8 @@ export function createDaemon(): DaemonInstance {
   };
 
   const server = http.createServer((req, res) => {
-    const url = req.url ?? "";
+    const parsedUrl = new URL(req.url ?? "", `http://${req.headers.host ?? "localhost"}`);
+    const pathname = parsedUrl.pathname;
     const method = req.method ?? "";
 
     const remoteAddr = req.socket.remoteAddress;
@@ -56,7 +57,7 @@ export function createDaemon(): DaemonInstance {
       return json(res, 403, { error: "Forbidden: non-loopback connection.", code: "FORBIDDEN" });
     }
 
-    if (method === "GET" && url === "/v1/health") {
+    if (method === "GET" && pathname === "/v1/health") {
       const body: HealthResponse = {
         ok: true,
         version: VERSION,
@@ -65,7 +66,7 @@ export function createDaemon(): DaemonInstance {
       return json(res, 200, body);
     }
 
-    if (method === "POST" && url === "/v1/pr/register") {
+    if (method === "POST" && pathname === "/v1/pr/register") {
       handleRegisterPR(req, res, ctx).catch(() => {
         if (!res.headersSent)
           json(res, 500, { error: "Internal server error.", code: "INTERNAL_ERROR" });
@@ -73,7 +74,7 @@ export function createDaemon(): DaemonInstance {
       return;
     }
 
-    if (method === "POST" && url === "/v1/annotations/query") {
+    if (method === "POST" && pathname === "/v1/annotations/query") {
       handleAnnotationsQuery(req, res, ctx).catch(() => {
         if (!res.headersSent)
           json(res, 500, { error: "Internal server error.", code: "INTERNAL_ERROR" });
@@ -81,7 +82,7 @@ export function createDaemon(): DaemonInstance {
       return;
     }
 
-    if (method === "POST" && url === "/v1/analysis/jobs") {
+    if (method === "POST" && pathname === "/v1/analysis/jobs") {
       handleCreateJob(req, res, ctx).catch(() => {
         if (!res.headersSent)
           json(res, 500, { error: "Internal server error.", code: "INTERNAL_ERROR" });
@@ -89,13 +90,13 @@ export function createDaemon(): DaemonInstance {
       return;
     }
 
-    const jobMatch = url.match(/^\/v1\/analysis\/jobs\/([^/?]+)/);
+    const jobMatch = pathname.match(/^\/v1\/analysis\/jobs\/([^/?]+)/);
     if (method === "GET" && jobMatch) {
       handleGetJob(res, ctx, jobMatch[1]);
       return;
     }
 
-    if (method === "GET" && url.startsWith("/v1/annotations")) {
+    if (method === "GET" && pathname.startsWith("/v1/annotations")) {
       handleGetAnnotations(req, res, ctx);
       return;
     }
@@ -123,5 +124,17 @@ export function startDaemon(daemon: DaemonInstance): Promise<void> {
       console.log(`  store:       in-memory`);
       resolve();
     });
+  });
+}
+
+/** Gracefully shut down the daemon: fail running jobs and close the server. */
+export function shutdownDaemon(daemon: DaemonInstance): Promise<void> {
+  const failed = daemon.ctx.jobs.failAllRunning();
+  if (failed > 0) {
+    console.log(`  marked ${failed} running/queued job(s) as failed.`);
+  }
+  console.log("PRism daemon shutting down...");
+  return new Promise((resolve) => {
+    daemon.server.close(() => resolve());
   });
 }

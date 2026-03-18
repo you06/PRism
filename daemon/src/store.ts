@@ -59,15 +59,25 @@ export interface JobStore {
     jobId: string,
     updates: Partial<Pick<AnalysisJob, "status" | "completed" | "failed">>,
   ): void;
+  failAllRunning(): number;
 }
 
 // ---- In-memory implementations ---------------------------------------------
 
 export class InMemoryPRRegistry implements PRRegistry {
   private store = new Map<string, RegisteredPR>();
+  private lookupIndex = new Map<string, RegisteredPR>();
+
+  private lookupKey(owner: string, repo: string, pullNumber: number, headSha: string): string {
+    return `${owner}/${repo}#${pullNumber}@${headSha}`;
+  }
 
   register(prId: string, data: RegisteredPR): void {
     this.store.set(prId, data);
+    this.lookupIndex.set(
+      this.lookupKey(data.prKey.owner, data.prKey.repo, data.prKey.pullNumber, data.prKey.headSha),
+      data,
+    );
   }
 
   get(prId: string): RegisteredPR | undefined {
@@ -80,17 +90,7 @@ export class InMemoryPRRegistry implements PRRegistry {
     pullNumber: number,
     headSha: string,
   ): RegisteredPR | undefined {
-    for (const pr of this.store.values()) {
-      if (
-        pr.prKey.owner === owner &&
-        pr.prKey.repo === repo &&
-        pr.prKey.pullNumber === pullNumber &&
-        pr.prKey.headSha === headSha
-      ) {
-        return pr;
-      }
-    }
-    return undefined;
+    return this.lookupIndex.get(this.lookupKey(owner, repo, pullNumber, headSha));
   }
 }
 
@@ -152,5 +152,16 @@ export class InMemoryJobStore implements JobStore {
     if (updates.status !== undefined) job.status = updates.status;
     if (updates.completed !== undefined) job.completed = updates.completed;
     if (updates.failed !== undefined) job.failed = updates.failed;
+  }
+
+  failAllRunning(): number {
+    let count = 0;
+    for (const job of this.store.values()) {
+      if (job.status === "running" || job.status === "queued") {
+        job.status = "failed";
+        count++;
+      }
+    }
+    return count;
   }
 }

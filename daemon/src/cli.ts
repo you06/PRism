@@ -9,7 +9,7 @@
 import { execSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import type { PRKey, Annotation } from "@prism/shared";
-import { createDaemon, startDaemon } from "./server.js";
+import { createDaemon, startDaemon, shutdownDaemon } from "./server.js";
 import { ensureRegistered } from "./routes.js";
 import { AgentAnalyzer } from "./analysis/agent-analyzer.js";
 import type { AgentType } from "./analysis/agent-analyzer.js";
@@ -195,6 +195,12 @@ async function main(): Promise<void> {
   if (command === "server") {
     const daemon = createDaemon();
     await startDaemon(daemon);
+    const shutdown = async () => {
+      await shutdownDaemon(daemon);
+      process.exit(0);
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
     return;
   }
 
@@ -225,6 +231,12 @@ async function main(): Promise<void> {
     // Step d: Start daemon
     const daemon = createDaemon();
     await startDaemon(daemon);
+    const shutdown = async () => {
+      await shutdownDaemon(daemon);
+      process.exit(0);
+    };
+    process.on("SIGINT", shutdown);
+    process.on("SIGTERM", shutdown);
 
     // Step e: Pre-register PR (fetches metadata + canonical hunks)
     const prKey: PRKey = {
@@ -304,6 +316,7 @@ async function main(): Promise<void> {
     console.log("Opening browser...");
     openBrowser(prUrl);
 
+    await shutdownDaemon(daemon);
     return;
   }
 

@@ -49,6 +49,9 @@ export class AnnotationCache {
       this.store.delete(key);
       return undefined;
     }
+    // Promote to most-recently-used (move to end of Map iteration order)
+    this.store.delete(key);
+    this.store.set(key, entry);
     return entry.annotation;
   }
 
