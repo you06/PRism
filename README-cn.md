@@ -22,9 +22,13 @@ cd daemon && bun build src/cli.ts --compile --outfile ../prism
 ./prism review 42                    # review PR #42（默认使用 codex）
 ./prism review 42 --agent claude     # 使用 claude
 ./prism review 42 --model gpt-4.1   # 指定模型
+./prism review 42 --lang cn         # 用简体中文输出摘要
+./prism review 42 --lang jp         # 用日语输出摘要
 ./prism review owner/repo#42        # review 指定仓库的 PR
 ./prism server                       # 仅启动 daemon（不分析）
 ```
+
+`prism review` 默认使用 `--lang en`。支持的值有 `en`、`cn` 和 `jp`。
 
 ### 方式 B：从源码运行
 
@@ -54,21 +58,7 @@ curl http://127.0.0.1:19280/v1/health
 3. 点击 **加载已解压的扩展程序**
 4. 选择 `extension/` 目录
 
-### 4) 将配对密钥复制到扩展中
-
-读取 token：
-
-```bash
-cat ~/.config/prism/pairing-secret
-```
-
-然后在 `chrome://extensions` 中打开 PRism service worker 控制台，运行：
-
-```js
-chrome.storage.local.set({ pairingToken: "<粘贴密钥>" });
-```
-
-### 5) 使用
+### 4) 使用
 
 打开任意 GitHub PR **Files changed** 页面：
 
@@ -108,10 +98,6 @@ pnpm --filter @prism/daemon smoke-test
 - **Daemon 离线**
   - 启动：`pnpm --filter @prism/daemon dev`
   - 检查：`curl http://127.0.0.1:19280/v1/health`
-
-- **配对 token 无效**
-  - 重新复制：`cat ~/.config/prism/pairing-secret`
-  - 在 `chrome.storage.local` 中重新设置
 
 - **GitHub 认证错误**
   - 运行 `gh auth login`

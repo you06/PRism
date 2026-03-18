@@ -13,8 +13,8 @@
 //   5. Job polling — tracks queued/running jobs and pushes updates
 // ---------------------------------------------------------------------------
 
-import type { PrismMessage, DaemonErrorKind } from "@prism/shared";
-import type { PRKey, HunkRef, Annotation } from "@prism/shared";
+import type { PrismMessage, DaemonErrorKind } from "./shared.js";
+import type { PRKey, HunkRef, Annotation } from "./shared.js";
 import { AnnotationCache, cacheKey } from "./background-cache.js";
 import * as api from "./background-api.js";
 import { PrismApiError } from "./background-api.js";
@@ -321,18 +321,31 @@ function handlePRContextUpdated(tabId: number, pr: PRKey): void {
   const state = getTab(tabId);
   state.pr = pr;
 
-  // Register PR with daemon (fire-and-forget, WORK14: surface errors to tab)
-  api.registerPR(pr).catch((err) => {
-    if (err instanceof PrismApiError) {
-      sendToTab(tabId, {
-        type: "DAEMON_ERROR",
-        errorKind: err.kind,
-        message: err.message,
-        retryAfterSec: err.retryAfterSec,
-      });
-    }
-    console.error("[PRism:bg] Failed to register PR:", err instanceof Error ? err.message : err);
-  });
+  // Register PR with daemon and adopt canonical SHAs from the response.
+  api.registerPR(pr)
+    .then((registered) => {
+      if (!registered) return;
+
+      const current = tabs.get(tabId);
+      if (!current?.pr) return;
+
+      current.pr = {
+        ...current.pr,
+        baseSha: registered.baseSha,
+        headSha: registered.headSha,
+      };
+    })
+    .catch((err) => {
+      if (err instanceof PrismApiError) {
+        sendToTab(tabId, {
+          type: "DAEMON_ERROR",
+          errorKind: err.kind,
+          message: err.message,
+          retryAfterSec: err.retryAfterSec,
+        });
+      }
+      console.error("[PRism:bg] Failed to register PR:", err instanceof Error ? err.message : err);
+    });
 }
 
 function handleRequestVisibleAnnotations(
@@ -341,19 +354,22 @@ function handleRequestVisibleAnnotations(
   hunks: HunkRef[],
 ): void {
   if (hunks.length === 0) return;
-  enqueueHunks(tabId, pr, hunks);
+  const state = getTab(tabId);
+  const effectivePr = state.pr ?? pr;
+  enqueueHunks(tabId, effectivePr, hunks);
 }
 
 function handleRetryHunk(tabId: number, pr: PRKey, hunk: HunkRef): void {
   // Invalidate cache for this hunk so it gets re-fetched
-  cache.invalidate(cacheKey(pr, hunk.patchHash));
+  const state = getTab(tabId);
+  const effectivePr = state.pr ?? pr;
+  cache.invalidate(cacheKey(effectivePr, hunk.patchHash));
 
   // Clear from in-flight if stuck
-  const state = tabs.get(tabId);
   if (state) {
     state.inFlight.delete(hunk.patchHash);
   }
 
   // Re-enqueue as a single-hunk request
-  enqueueHunks(tabId, pr, [hunk]);
+  enqueueHunks(tabId, effectivePr, [hunk]);
 }

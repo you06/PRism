@@ -5,10 +5,10 @@
 //   background.ts — service worker (loaded by manifest.json)
 //   content.ts    — content script (injected into GitHub PR pages)
 //
-// This file exists solely to validate that the @prism/shared dependency
-// resolves correctly during `pnpm typecheck`.
+// This file exists solely to validate extension-local shared types during
+// `pnpm typecheck`.
 // ---------------------------------------------------------------------------
 
-import type { PRKey, HunkRef, PrismMessage } from "@prism/shared";
+import type { PRKey, HunkRef, PrismMessage } from "./shared.js";
 
 export type { PRKey, HunkRef, PrismMessage };

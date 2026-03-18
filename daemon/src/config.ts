@@ -3,7 +3,6 @@
 //
 // Config dir is fixed at ~/.config/prism
 // Config file: config.json
-// Pairing secret: pairing-secret (separate file, restricted permissions)
 // ---------------------------------------------------------------------------
 
 import fs from "node:fs";

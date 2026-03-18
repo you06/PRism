@@ -13,6 +13,11 @@ import { createDaemon, startDaemon } from "./server.js";
 import { ensureRegistered } from "./routes.js";
 import { AgentAnalyzer } from "./analysis/agent-analyzer.js";
 import type { AgentType } from "./analysis/agent-analyzer.js";
+import {
+  isReviewLanguageCode,
+  resolveReviewLanguageName,
+  type ReviewLanguageCode,
+} from "./analysis/review-language.js";
 import type { PRAnalysisInput, PRFragment } from "./analysis/types.js";
 import type { CanonicalHunk } from "./hunk-canonicalizer.js";
 
@@ -74,8 +79,12 @@ function openBrowser(url: string): void {
 
 function printUsage(): void {
   console.log("Usage:");
-  console.log("  prism review <pr_number> [--agent codex|claude] [--model <model>]");
-  console.log("  prism review owner/repo#<pr_number> [--agent codex|claude] [--model <model>]");
+  console.log(
+    "  prism review <pr_number> [--agent codex|claude] [--model <model>] [--lang en|cn|jp]",
+  );
+  console.log(
+    "  prism review owner/repo#<pr_number> [--agent codex|claude] [--model <model>] [--lang en|cn|jp]",
+  );
   console.log("  prism server                          — start daemon only");
   process.exit(1);
 }
@@ -86,6 +95,7 @@ interface ReviewArgs {
   pullNumber: number;
   agent: AgentType;
   model?: string;
+  language: ReviewLanguageCode;
 }
 
 function parseReviewTarget(target: string): { owner: string; repo: string; pullNumber: number } {
@@ -120,6 +130,7 @@ function parseReviewArgs(args: string[]): ReviewArgs {
   const { owner, repo, pullNumber } = parseReviewTarget(args[0]);
   let agent: AgentType = "codex";
   let model: string | undefined;
+  let language: ReviewLanguageCode = "en";
 
   // Parse optional flags from args[1..]
   let i = 1;
@@ -135,13 +146,21 @@ function parseReviewArgs(args: string[]): ReviewArgs {
     } else if (args[i] === "--model" && i + 1 < args.length) {
       model = args[i + 1];
       i += 2;
+    } else if (args[i] === "--lang" && i + 1 < args.length) {
+      const val = args[i + 1];
+      if (!isReviewLanguageCode(val)) {
+        console.error(`Error: --lang must be "en", "cn", or "jp", got "${val}".`);
+        process.exit(1);
+      }
+      language = val;
+      i += 2;
     } else {
       console.error(`Error: unknown flag "${args[i]}".`);
       printUsage();
     }
   }
 
-  return { owner, repo, pullNumber, agent, model };
+  return { owner, repo, pullNumber, agent, model, language };
 }
 
 // ---- Hunk → fragment conversion --------------------------------------------
@@ -181,7 +200,7 @@ async function main(): Promise<void> {
 
   if (command === "review") {
     const reviewArgs = parseReviewArgs(args.slice(1));
-    const { owner, repo, pullNumber, agent, model } = reviewArgs;
+    const { owner, repo, pullNumber, agent, model, language } = reviewArgs;
 
     // Step a: Check we're in a git repo
     if (!isInsideGitRepo()) {
@@ -241,7 +260,11 @@ async function main(): Promise<void> {
 
     // Step g: Run agent analysis
     console.log(`Analyzing ${hunks.length} hunks with ${agent}...`);
-    const analyzer = new AgentAnalyzer({ agent, model });
+    const analyzer = new AgentAnalyzer({
+      agent,
+      model,
+      language: resolveReviewLanguageName(language),
+    });
     const result = await analyzer.analyzePR(input);
 
     if (result.ok) {

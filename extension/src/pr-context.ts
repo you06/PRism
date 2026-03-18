@@ -10,18 +10,18 @@
 // SPA navigation.
 // ---------------------------------------------------------------------------
 
-import type { PRKey } from "@prism/shared";
+import type { PRKey } from "./shared.js";
 
 // ---- URL matching -----------------------------------------------------------
 
-/** Matches: /owner/repo/pull/123/files and variants (/files/, /files?w=1, etc.) */
-const PR_FILES_RE = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/files\b/;
+/** Matches: /owner/repo/pull/123/files or /changes and variants. */
+const PR_CHANGES_RE = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)\/(?:files|changes)\b/;
 
 /** True when the given pathname looks like a GitHub PR Changes page. */
 export function isGitHubPRChangesPage(
   pathname = window.location.pathname,
 ): boolean {
-  return PR_FILES_RE.test(pathname);
+  return PR_CHANGES_RE.test(pathname);
 }
 
 /** Extract owner / repo / pullNumber from a URL pathname. */
@@ -29,7 +29,7 @@ export function parsePRFromUrl(
   pathname = window.location.pathname,
   host = window.location.hostname,
 ): Pick<PRKey, "host" | "owner" | "repo" | "pullNumber"> | null {
-  const match = pathname.match(PR_FILES_RE);
+  const match = pathname.match(PR_CHANGES_RE);
   if (!match) return null;
   return {
     host,

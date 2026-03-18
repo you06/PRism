@@ -24,7 +24,7 @@
 //   - Binary files / "Large diff not rendered": skipped.
 // ---------------------------------------------------------------------------
 
-import type { HunkRef } from "@prism/shared";
+import type { HunkRef } from "./shared.js";
 import {
   normalizeLine,
   computePatchHash,
@@ -50,6 +50,7 @@ export function resetAnchorCounter(): void {
  * [MODERATE] div.file is the classic container class.
  */
 const FILE_CONTAINER_SELECTORS = [
+  'table[aria-label^="Diff for:"]',
   "div.file[data-tagsearch-path]",
   "copilot-diff-entry",
   "div.file",
@@ -79,6 +80,12 @@ function findFileContainers(): HTMLElement[] {
  *   5. [FRAGILE]  clipboard-copy value in file header
  */
 function extractFilePath(container: HTMLElement): string | null {
+  // Strategy 0: aria-label on GitHub's newer /changes diff tables
+  const ariaLabel = container.getAttribute("aria-label");
+  if (ariaLabel?.startsWith("Diff for:")) {
+    return ariaLabel.slice("Diff for:".length).trim();
+  }
+
   // Strategy 1: data-tagsearch-path
   const tagSearchPath = container.getAttribute("data-tagsearch-path");
   if (tagSearchPath) return tagSearchPath;
@@ -150,10 +157,37 @@ function parseHunkHeader(text: string): ParsedHunkHeader | null {
  * [MODERATE] These class names have been stable across GitHub versions.
  */
 function classifyDiffCell(cell: HTMLElement): DiffLineType | null {
-  const cl = cell.classList;
-  if (cl.contains("blob-code-addition")) return "add";
-  if (cl.contains("blob-code-deletion")) return "delete";
-  if (cl.contains("blob-code-context")) return "context";
+  const side = cell.getAttribute("data-diff-side") ?? "";
+  const numberCell = cell.parentElement?.querySelector<HTMLElement>(
+    `td[data-diff-side="${CSS.escape(side)}"]:not(.diff-text-cell)`,
+  );
+  const attrsText = [
+    cell.className,
+    cell.getAttribute("style") ?? "",
+    numberCell?.className ?? "",
+    numberCell?.getAttribute("style") ?? "",
+  ].join(" ");
+
+  if (
+    attrsText.includes("blob-code-addition") ||
+    attrsText.includes("addition")
+  ) {
+    return "add";
+  }
+  if (
+    attrsText.includes("blob-code-deletion") ||
+    attrsText.includes("deletion")
+  ) {
+    return "delete";
+  }
+  if (
+    attrsText.includes("blob-code-context") ||
+    attrsText.includes("neutral") ||
+    attrsText.includes("context") ||
+    cell.classList.contains("diff-text-cell")
+  ) {
+    return "context";
+  }
   return null;
 }
 
@@ -167,8 +201,44 @@ function classifyDiffCell(cell: HTMLElement): DiffLineType | null {
  * [MODERATE] .blob-code-inner is the stable inner content wrapper.
  */
 function extractCellContent(cell: HTMLElement): string {
+  const newUiContent = cell.querySelector<HTMLElement>(
+    '[data-testid="diff-line-content"], .react-code-text, .react-code-cell',
+  );
+  if (newUiContent?.textContent) {
+    return newUiContent.textContent;
+  }
+
   const inner = cell.querySelector<HTMLElement>(".blob-code-inner");
   return (inner ?? cell).textContent ?? "";
+}
+
+function findDiffContentCell(row: HTMLTableRowElement): HTMLElement | null {
+  const diffTextCells = Array.from(
+    row.querySelectorAll<HTMLElement>("td.diff-text-cell"),
+  );
+
+  let contextCell: HTMLElement | null = null;
+  for (const cell of diffTextCells) {
+    const lineType = classifyDiffCell(cell);
+    if (lineType === "add" || lineType === "delete") {
+      return cell;
+    }
+    if (!contextCell && lineType === "context") {
+      contextCell = cell;
+    }
+  }
+
+  if (contextCell) return contextCell;
+
+  const cells = Array.from(row.cells) as HTMLElement[];
+  for (let i = cells.length - 1; i >= 0; i--) {
+    const cell = cells[i];
+    if (!cell.hasAttribute("data-line-number")) {
+      return cell;
+    }
+  }
+
+  return null;
 }
 
 // ---- Hunk Extraction (per file) ---------------------------------------------
@@ -193,6 +263,7 @@ const DIFF_TABLE_SELECTORS = [
  * [MODERATE] td.blob-code-hunk is the unified diff hunk header cell.
  */
 const HUNK_HEADER_CELL_SELECTORS = [
+  "td.diff-hunk-cell",
   "td.blob-code-hunk",
   "td.blob-code.blob-code-hunk",
 ] as const;
@@ -248,16 +319,28 @@ function extractHunksFromTable(table: HTMLTableElement): RawHunk[] {
     if (!currentHunk) continue;
 
     const codeCells = row.querySelectorAll<HTMLElement>("td.blob-code");
-    for (const cell of codeCells) {
-      const lineType = classifyDiffCell(cell);
-      if (lineType === null) continue;
+    if (codeCells.length > 0) {
+      for (const cell of codeCells) {
+        const lineType = classifyDiffCell(cell);
+        if (lineType === null) continue;
 
-      const content = extractCellContent(cell);
-      currentHunk.lines.push(normalizeLine(content, lineType));
-      // In unified view there is one relevant code cell per row.
-      // Break after the first classified cell to avoid double-counting
-      // in split view (where both sides appear in the same row).
-      break;
+        const content = extractCellContent(cell);
+        currentHunk.lines.push(normalizeLine(content, lineType));
+        // In unified view there is one relevant code cell per row.
+        // Break after the first classified cell to avoid double-counting
+        // in split view (where both sides appear in the same row).
+        break;
+      }
+      continue;
+    }
+
+    const contentCell = findDiffContentCell(row);
+    if (contentCell) {
+      const lineType = classifyDiffCell(contentCell);
+      if (lineType !== null) {
+        const content = extractCellContent(contentCell);
+        currentHunk.lines.push(normalizeLine(content, lineType));
+      }
     }
   }
 
@@ -309,7 +392,11 @@ export function extractHunks(): HunkRef[] {
 
     // Find the diff table
     let diffTable: HTMLTableElement | null = null;
+    if (container instanceof HTMLTableElement) {
+      diffTable = container;
+    }
     for (const selector of DIFF_TABLE_SELECTORS) {
+      if (diffTable) break;
       diffTable = container.querySelector<HTMLTableElement>(selector);
       if (diffTable) break;
     }

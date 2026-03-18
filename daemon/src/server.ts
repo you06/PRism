@@ -18,7 +18,6 @@ import {
   json,
   type RouteContext,
 } from "./routes.js";
-import { ensurePairingSecret } from "./secret.js";
 import {
   InMemoryPRRegistry,
   InMemoryAnnotationStore,
@@ -31,7 +30,6 @@ export interface DaemonInstance {
   server: http.Server;
   ctx: RouteContext;
   config: DaemonConfig;
-  pairingSecret: string;
 }
 
 function isLoopback(addr: string): boolean {
@@ -41,7 +39,6 @@ function isLoopback(addr: string): boolean {
 /** Create the daemon server and stores without starting to listen. */
 export function createDaemon(): DaemonInstance {
   const config = loadConfig();
-  const pairingSecret = ensurePairingSecret(config.configDir);
 
   const ctx: RouteContext = {
     prs: new InMemoryPRRegistry(),
@@ -66,11 +63,6 @@ export function createDaemon(): DaemonInstance {
         capabilities: ["query", "jobs", "cache"],
       };
       return json(res, 200, body);
-    }
-
-    const token = req.headers["x-prism-token"];
-    if (token !== pairingSecret) {
-      return json(res, 401, { error: "unauthorized", code: "UNAUTHORIZED" });
     }
 
     if (method === "POST" && url === "/v1/pr/register") {
@@ -111,7 +103,7 @@ export function createDaemon(): DaemonInstance {
     json(res, 404, { error: "not found", code: "NOT_FOUND" });
   });
 
-  return { server, ctx, config, pairingSecret };
+  return { server, ctx, config };
 }
 
 /** Start the daemon server and return a promise that resolves when it's listening. */
@@ -129,7 +121,6 @@ export function startDaemon(daemon: DaemonInstance): Promise<void> {
       console.log(`  listening on http://${config.host}:${config.port}`);
       console.log(`  config dir:  ${config.configDir}`);
       console.log(`  store:       in-memory`);
-      console.log(`  pairing secret: configured`);
       resolve();
     });
   });

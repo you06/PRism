@@ -15,29 +15,12 @@
 //   PRISM_URL           — Daemon URL   (default: "http://127.0.0.1:19280")
 // ---------------------------------------------------------------------------
 
-import fs from "node:fs";
-import path from "node:path";
-import os from "node:os";
-
 // ---- Configuration ---------------------------------------------------------
 
 const BASE_URL = process.env["PRISM_URL"] || "http://127.0.0.1:19280";
 const TEST_OWNER = process.env["PRISM_SMOKE_OWNER"] || "cli";
 const TEST_REPO = process.env["PRISM_SMOKE_REPO"] || "cli";
 const TEST_PR = parseInt(process.env["PRISM_SMOKE_PR"] || "9530", 10);
-
-// ---- Pairing secret --------------------------------------------------------
-
-function readPairingSecret(): string {
-  const secretPath = path.join(os.homedir(), ".config", "prism", "pairing-secret");
-  try {
-    return fs.readFileSync(secretPath, "utf-8").trim();
-  } catch {
-    console.error(`Cannot read pairing secret at ${secretPath}`);
-    console.error("Start the daemon at least once to generate it.");
-    process.exit(1);
-  }
-}
 
 // ---- HTTP helpers ----------------------------------------------------------
 
@@ -50,14 +33,10 @@ async function api(
   method: string,
   urlPath: string,
   body?: unknown,
-  auth = true,
 ): Promise<FetchResult> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
-  if (auth) {
-    headers["X-PRism-Token"] = pairingSecret;
-  }
 
   const res = await fetch(`${BASE_URL}${urlPath}`, {
     method,
@@ -106,7 +85,7 @@ function sleep(ms: number): Promise<void> {
 async function stepHealth(): Promise<boolean> {
   const name = "GET /v1/health";
   try {
-    const res = await api("GET", "/v1/health", undefined, false);
+    const res = await api("GET", "/v1/health");
     if (res.status === 200 && res.body["ok"] === true) {
       const caps = res.body["capabilities"] as string[];
       pass(name, `v${res.body["version"]} capabilities=[${caps.join(",")}]`);
@@ -289,8 +268,6 @@ async function stepGetAnnotations(headSha: string): Promise<boolean> {
 }
 
 // ---- Main ------------------------------------------------------------------
-
-const pairingSecret = readPairingSecret();
 
 async function main(): Promise<void> {
   console.log("PRism smoke test");

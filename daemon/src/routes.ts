@@ -110,6 +110,27 @@ function makeJobId(): string {
   return `job_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
+function resolveCanonicalHunk(
+  registered: RegisteredPR,
+  hunk: HunkRef,
+): CanonicalHunk | undefined {
+  const exact = registered.canonicalHunks.find(
+    (candidate) =>
+      candidate.filePath === hunk.filePath &&
+      candidate.patchHash === hunk.patchHash,
+  );
+  if (exact) return exact;
+
+  return registered.canonicalHunks.find(
+    (candidate) =>
+      candidate.filePath === hunk.filePath &&
+      candidate.oldStart === hunk.oldStart &&
+      candidate.oldLines === hunk.oldLines &&
+      candidate.newStart === hunk.newStart &&
+      candidate.newLines === hunk.newLines,
+  );
+}
+
 // ---- Ensure PR is registered (lazy fetch from GitHub) -----------------------
 
 export async function ensureRegistered(
@@ -226,21 +247,29 @@ export async function handleAnnotationsQuery(
   const pr = body["pr"] as PRKey;
   const visibleHunks = body["visibleHunks"] as HunkRef[];
   const enqueueMissing = body["enqueueMissing"] === true;
+  const registered = await ensureRegistered(pr, ctx);
 
   // Look up cached annotations for each visible hunk
   const found: Annotation[] = [];
   const missing: Array<{ filePath: string; patchHash: string }> = [];
 
   for (const hunk of visibleHunks) {
+    const canonical = resolveCanonicalHunk(registered, hunk);
+    const patchHash = canonical?.patchHash ?? hunk.patchHash;
+    const filePath = canonical?.filePath ?? hunk.filePath;
     const ann = ctx.annotations.get(
-      pr.headSha,
-      hunk.filePath,
-      hunk.patchHash,
+      registered.prKey.headSha,
+      filePath,
+      patchHash,
     );
     if (ann && ann.status === "ready") {
-      found.push(ann);
+      found.push({
+        ...ann,
+        filePath: hunk.filePath,
+        patchHash: hunk.patchHash,
+      });
     } else {
-      missing.push({ filePath: hunk.filePath, patchHash: hunk.patchHash });
+      missing.push({ filePath, patchHash });
     }
   }
 

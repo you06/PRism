@@ -6,7 +6,7 @@
 // and forth over the same hunks.
 // ---------------------------------------------------------------------------
 
-import type { Annotation, PRKey } from "@prism/shared";
+import type { Annotation, PRKey } from "./shared.js";
 
 /** Default cache entry TTL in milliseconds (30 seconds). */
 const DEFAULT_TTL_MS = 30_000;

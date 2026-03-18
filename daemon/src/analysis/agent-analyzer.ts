@@ -24,7 +24,7 @@ export interface AgentAnalyzerOptions {
   model?: string;
   /** Timeout in milliseconds (default: 120 000). */
   timeoutMs?: number;
-  /** Language for summaries (default: "English"). */
+  /** Human-readable language name injected into the review prompt. */
   language?: string;
 }
 
@@ -224,9 +224,9 @@ export class AgentAnalyzer implements PRAnalyzer {
 
   private buildCommand(): { cmd: string; args: string[] } {
     if (this.agent === "codex") {
-      const args = ["exec", "--sandbox", "read-only"];
+      const args = ["exec", "--sandbox", "read-only", "--color", "never"];
       if (this.model) args.push("-m", this.model);
-      args.push("-q", "-");
+      args.push("-");
       return { cmd: "codex", args };
     }
 

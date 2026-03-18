@@ -14,7 +14,7 @@
 //   hunk's domAnchorId. renderCard() updates existing cards in place.
 // ---------------------------------------------------------------------------
 
-import type { RiskLevel } from "@prism/shared";
+import type { RiskLevel } from "./shared.js";
 
 // ---- Types -----------------------------------------------------------------
 
@@ -26,13 +26,12 @@ export interface CardAnnotation {
 }
 
 /** Discriminated union of card states.
- *  WORK14 adds offline / auth_error / rate_limited for degraded-state UI. */
+ *  WORK14 adds offline / rate_limited for degraded-state UI. */
 export type CardState =
   | { kind: "loading" }
   | { kind: "ready"; data: CardAnnotation }
   | { kind: "error"; message: string }
   | { kind: "offline" }
-  | { kind: "auth_error" }
   | { kind: "rate_limited"; retryAfterSec?: number };
 
 // ---- Constants -------------------------------------------------------------
@@ -249,26 +248,6 @@ html[data-dark-theme="dark"] .prism-card--offline {
   }
 }
 
-/* ---- Auth error state (WORK14) ---- */
-.prism-card--auth-error {
-  border-color: #bf8700;
-  background: #fff8c5;
-  color: #6a5304;
-}
-html[data-color-mode="dark"] .prism-card--auth-error,
-html[data-dark-theme="dark"] .prism-card--auth-error {
-  background: #272115;
-  border-color: #6a5304;
-  color: #d29922;
-}
-@media (prefers-color-scheme: dark) {
-  html[data-color-mode="auto"] .prism-card--auth-error {
-    background: #272115;
-    border-color: #6a5304;
-    color: #d29922;
-  }
-}
-
 /* ---- Rate-limited state (WORK14) ---- */
 .prism-card--rate-limited {
   border-color: #bf8700;
@@ -367,10 +346,6 @@ function buildReadyContent(data: CardAnnotation): string {
     </div>
     <div class="prism-card__summary">${escapeHtml(data.summary)}</div>
     ${impactLine}
-    <div class="prism-card__actions">
-      <button class="prism-card__btn" data-prism-action="refresh">Refresh</button>
-      <button class="prism-card__btn" data-prism-action="explain">Explain deeper</button>
-    </div>
   </div>`;
 }
 
@@ -388,16 +363,6 @@ function buildOfflineContent(): string {
   return `<div class="prism-card prism-card--offline">
     <span class="prism-card__label">PRism</span>
     <span class="prism-card__text">Daemon is offline. Start the PRism daemon and retry.</span>
-    <div class="prism-card__actions">
-      <button class="prism-card__btn" data-prism-action="retry">Retry</button>
-    </div>
-  </div>`;
-}
-
-function buildAuthErrorContent(): string {
-  return `<div class="prism-card prism-card--auth-error">
-    <span class="prism-card__label">PRism</span>
-    <span class="prism-card__text">Pairing token not configured or invalid. Check extension settings.</span>
     <div class="prism-card__actions">
       <button class="prism-card__btn" data-prism-action="retry">Retry</button>
     </div>
@@ -427,8 +392,6 @@ function buildCardInnerHtml(state: CardState): string {
       return buildErrorContent(state.message);
     case "offline":
       return buildOfflineContent();
-    case "auth_error":
-      return buildAuthErrorContent();
     case "rate_limited":
       return buildRateLimitedContent(state.retryAfterSec);
   }

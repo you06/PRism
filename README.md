@@ -22,9 +22,13 @@ Then use it (run inside a git repo):
 ./prism review 42                    # review PR #42 (default: codex)
 ./prism review 42 --agent claude     # use claude instead
 ./prism review 42 --model gpt-4.1   # specify model
+./prism review 42 --lang cn         # output summaries in Simplified Chinese
+./prism review 42 --lang jp         # output summaries in Japanese
 ./prism review owner/repo#42        # review PR from any repo
 ./prism server                       # start daemon only (no analysis)
 ```
+
+`prism review` defaults to `--lang en`. Supported values are `en`, `cn`, and `jp`.
 
 ### Option B: Run from source
 
@@ -54,21 +58,7 @@ curl http://127.0.0.1:19280/v1/health
 3. Click **Load unpacked**
 4. Select the `extension/` directory
 
-### 4) Copy the pairing secret into the extension
-
-Read the token:
-
-```bash
-cat ~/.config/prism/pairing-secret
-```
-
-Then open the PRism service worker console from `chrome://extensions` and run:
-
-```js
-chrome.storage.local.set({ pairingToken: "<paste-secret-here>" });
-```
-
-### 5) Use it
+### 4) Use it
 
 Open any GitHub PR **Files changed** page:
 
@@ -108,10 +98,6 @@ pnpm --filter @prism/daemon smoke-test
 - **Daemon is offline**
   - Start it with: `pnpm --filter @prism/daemon dev`
   - Check: `curl http://127.0.0.1:19280/v1/health`
-
-- **Pairing token invalid**
-  - Re-copy: `cat ~/.config/prism/pairing-secret`
-  - Re-set it in `chrome.storage.local`
 
 - **GitHub auth error**
   - Run `gh auth login`

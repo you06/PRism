@@ -5,11 +5,10 @@
 // All other extension code must go through the background service worker.
 //
 // Security model:
-//   - All authenticated requests include X-PRism-Token (pairing secret).
-//   - Token is read from chrome.storage.local ("pairingToken") and cached.
-//   - GET /v1/health is unauthenticated (used for connectivity checks).
+//   - All daemon requests are limited to localhost.
+//   - GET /v1/health is used for connectivity checks.
 //   - Errors are classified into PrismApiError kinds so the UI can show
-//     distinct states for offline / auth_failed / rate_limited / github_error.
+//     distinct states for offline / rate_limited / github_error.
 // ---------------------------------------------------------------------------
 
 import type {
@@ -18,15 +17,14 @@ import type {
   RegisterPRResponse,
   CreateJobResponse,
   GetJobResponse,
-} from "@prism/shared";
-import type { HunkRef, PRKey } from "@prism/shared";
-import { DAEMON_BASE_URL } from "@prism/shared";
+} from "./shared.js";
+import type { HunkRef, PRKey } from "./shared.js";
+import { DAEMON_BASE_URL } from "./shared.js";
 
 // ---- Typed API errors (WORK14) ----------------------------------------------
 
 export type ApiErrorKind =
   | "offline"
-  | "auth_failed"
   | "rate_limited"
   | "github_error";
 
@@ -45,35 +43,12 @@ export class PrismApiError extends Error {
   }
 }
 
-// ---- Pairing token management -----------------------------------------------
-
-let cachedToken: string | null = null;
-
-async function getPairingToken(): Promise<string | null> {
-  if (cachedToken != null) return cachedToken;
-  try {
-    const result = await chrome.storage.local.get("pairingToken");
-    cachedToken = (result.pairingToken as string) ?? null;
-    return cachedToken;
-  } catch {
-    return null;
-  }
-}
-
-// Invalidate cache when the user updates the token in extension settings.
-chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes["pairingToken"]) {
-    cachedToken = (changes["pairingToken"].newValue as string) ?? null;
-  }
-});
-
 // ---- Shared fetch wrapper ---------------------------------------------------
 
 /**
  * Low-level fetch to the daemon. Classifies failures into PrismApiError.
  *
  * - Network error / connection refused → "offline"
- * - HTTP 401                           → "auth_failed"
  * - HTTP 429                           → "rate_limited"
  * - HTTP 4xx/5xx with GITHUB_* code    → "github_error"
  */
@@ -81,15 +56,10 @@ async function daemonFetch(
   path: string,
   options: RequestInit = {},
 ): Promise<Response> {
-  const token = await getPairingToken();
-
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-PRism-Client": "extension",
   };
-  if (token) {
-    headers["X-PRism-Token"] = token;
-  }
 
   let res: Response;
   try {
@@ -104,13 +74,6 @@ async function daemonFetch(
     throw new PrismApiError(
       "offline",
       "PRism daemon is not running. Start the daemon and retry.",
-    );
-  }
-
-  if (res.status === 401) {
-    throw new PrismApiError(
-      "auth_failed",
-      "Pairing token not configured or invalid. Check extension settings.",
     );
   }
 

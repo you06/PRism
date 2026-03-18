@@ -10,7 +10,7 @@
 //   5. Render inline annotation cards next to hunks
 // ---------------------------------------------------------------------------
 
-import type { PRKey, HunkRef, Annotation, PrismMessage, DaemonErrorKind } from "@prism/shared";
+import type { PRKey, HunkRef, Annotation, PrismMessage, DaemonErrorKind } from "./shared.js";
 import {
   isGitHubPRChangesPage,
   extractPRContext,
@@ -63,9 +63,11 @@ function sendToBackground(message: PrismMessage): void {
 function notifyVisibleHunks(): void {
   if (!currentContext) return;
 
-  const visible = extractedHunks.filter(
-    (h) => h.domAnchorId && visibleHunkIds.has(h.domAnchorId),
-  );
+  const visible = visibleHunkIds.size > 0
+    ? extractedHunks.filter(
+        (h) => h.domAnchorId && visibleHunkIds.has(h.domAnchorId),
+      )
+    : extractedHunks.filter((h) => Boolean(h.domAnchorId));
 
   sendToBackground({
     type: "REQUEST_VISIBLE_ANNOTATIONS",
@@ -173,6 +175,7 @@ function reExtractHunks(): void {
 
   extractedHunks = newHunks;
   setupHunkObserver();
+  notifyVisibleHunks();
 }
 
 /**
@@ -193,6 +196,7 @@ function bootstrapHunkTracking(): void {
           insertLoadingCards(extractedHunks);
           setupHunkObserver();
           setupDiffMutationObserver();
+          notifyVisibleHunks();
         }
       }
     }, 2_000);
@@ -202,6 +206,7 @@ function bootstrapHunkTracking(): void {
   insertLoadingCards(extractedHunks);
   setupHunkObserver();
   setupDiffMutationObserver();
+  notifyVisibleHunks();
 }
 
 /** Tear down all hunk tracking state and remove annotation cards. */
@@ -336,9 +341,6 @@ function handleDaemonError(
     switch (errorKind) {
       case "offline":
         state = { kind: "offline" };
-        break;
-      case "auth_failed":
-        state = { kind: "auth_error" };
         break;
       case "rate_limited":
         state = { kind: "rate_limited", retryAfterSec };

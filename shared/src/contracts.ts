@@ -95,7 +95,6 @@ export interface GetAnnotationsResponse {
 /** Error kinds surfaced by the daemon or API layer to the extension UI. */
 export type DaemonErrorKind =
   | "offline"
-  | "auth_failed"
   | "rate_limited"
   | "github_error";
 
