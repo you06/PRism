@@ -34,6 +34,8 @@ interface TabState {
   coalesceTimer: ReturnType<typeof setTimeout> | null;
   /** patchHashes currently being fetched (in-flight). */
   inFlight: Set<string>;
+  /** Resolves once registerPR has completed for this tab. */
+  registrationReady: Promise<void> | null;
 }
 
 const tabs = new Map<number, TabState>();
@@ -46,6 +48,7 @@ function getTab(tabId: number): TabState {
       pendingHunks: new Map(),
       coalesceTimer: null,
       inFlight: new Set(),
+      registrationReady: null,
     };
     tabs.set(tabId, state);
   }
@@ -99,6 +102,11 @@ function enqueueHunks(tabId: number, pr: PRKey, hunks: HunkRef[]): void {
 async function flushBatch(tabId: number): Promise<void> {
   const state = tabs.get(tabId);
   if (!state?.pr || state.pendingHunks.size === 0) return;
+
+  // Wait for PR registration to complete so we have canonical SHAs
+  if (state.registrationReady) {
+    await state.registrationReady;
+  }
 
   const pr = state.pr;
   const hunks = [...state.pendingHunks.values()];
@@ -236,8 +244,14 @@ async function pollJob(jobId: string): Promise<void> {
       console.log(`[PRism:bg] Job ${jobId} finished: ${status.status}`);
 
       if (status.status === "completed") {
-        // Invalidate cache so the content script's re-query gets fresh data
-        cache.clearForPR(job.pr);
+        // Use current tab state's PR (has canonical SHAs) instead of job's stored PR
+        const tabState = tabs.get(job.tabId);
+        const effectivePr = tabState?.pr ?? job.pr;
+        cache.clearForPR(effectivePr);
+        // Also clear using original job.pr in case SHAs differ
+        if (effectivePr !== job.pr) {
+          cache.clearForPR(job.pr);
+        }
       }
 
       stopJobPolling(jobId);
@@ -322,7 +336,8 @@ function handlePRContextUpdated(tabId: number, pr: PRKey): void {
   state.pr = pr;
 
   // Register PR with daemon and adopt canonical SHAs from the response.
-  api.registerPR(pr)
+  // Store the promise so flushBatch can wait for registration to complete.
+  state.registrationReady = api.registerPR(pr)
     .then((registered) => {
       if (!registered) return;
 

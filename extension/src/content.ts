@@ -159,7 +159,13 @@ function setupDiffMutationObserver(): void {
  */
 function reExtractHunks(): void {
   const newHunks = extractHunks();
-  if (newHunks.length === extractedHunks.length) return;
+
+  // Check if anything actually changed — compare both count and content
+  if (newHunks.length === extractedHunks.length) {
+    const oldHashes = new Set(extractedHunks.map((h) => h.patchHash));
+    const changed = newHunks.some((h) => !oldHashes.has(h.patchHash));
+    if (!changed) return;
+  }
 
   console.log(
     `[PRism] Re-extraction: ${extractedHunks.length} → ${newHunks.length} hunks`,
@@ -188,18 +194,38 @@ function bootstrapHunkTracking(): void {
   extractedHunks = extractHunks();
 
   if (extractedHunks.length === 0) {
-    // DOM may not be fully rendered yet — retry shortly
-    setTimeout(() => {
-      if (currentContext && extractedHunks.length === 0) {
-        extractedHunks = extractHunks();
-        if (extractedHunks.length > 0) {
-          insertLoadingCards(extractedHunks);
-          setupHunkObserver();
-          setupDiffMutationObserver();
-          notifyVisibleHunks();
-        }
+    // Set up mutation observer immediately — it will catch lazy-loaded diffs
+    setupDiffMutationObserver();
+
+    // Retry with increasing delays (1s, 2s, 4s)
+    const retryDelays = [1000, 2000, 4000];
+    let retryIndex = 0;
+
+    const retry = () => {
+      if (!currentContext || extractedHunks.length > 0) return;
+      if (retryIndex >= retryDelays.length) {
+        console.warn('[PRism] No hunks found after all retries');
+        return;
       }
-    }, 2_000);
+
+      extractedHunks = extractHunks();
+      if (extractedHunks.length > 0) {
+        console.log('[PRism] Found', extractedHunks.length, 'hunks on retry', retryIndex + 1);
+        insertLoadingCards(extractedHunks);
+        setupHunkObserver();
+        notifyVisibleHunks();
+        return;
+      }
+
+      retryIndex++;
+      if (retryIndex < retryDelays.length) {
+        setTimeout(retry, retryDelays[retryIndex]);
+      } else {
+        console.warn('[PRism] No hunks found after all retries');
+      }
+    };
+
+    setTimeout(retry, retryDelays[0]);
     return;
   }
 
@@ -361,11 +387,29 @@ function handleDaemonError(
  * Matches annotations to hunks by patchHash and updates the cards.
  */
 function handleAnnotationsUpdated(annotations: Annotation[]): void {
-  for (const ann of annotations) {
-    // Find the hunk this annotation belongs to
-    const hunk = extractedHunks.find((h) => h.patchHash === ann.patchHash);
-    if (!hunk?.domAnchorId) continue;
+  const matchedHunkIds = new Set<string>();
 
+  for (const ann of annotations) {
+    // Tier 1: exact patchHash match
+    let hunk = extractedHunks.find((h) => h.patchHash === ann.patchHash);
+
+    // Tier 2: same file, unmatched hunk (fuzzy fallback)
+    if (!hunk) {
+      hunk = extractedHunks.find(
+        (h) => h.filePath === ann.filePath && h.domAnchorId && !matchedHunkIds.has(h.domAnchorId)
+      );
+      if (hunk) {
+        console.warn('[PRism] patchHash mismatch, fuzzy matched:', ann.filePath,
+          'dom:', hunk.patchHash, 'api:', ann.patchHash);
+      }
+    }
+
+    if (!hunk?.domAnchorId) {
+      console.warn('[PRism] No hunk found for annotation:', ann.filePath, ann.patchHash);
+      continue;
+    }
+
+    matchedHunkIds.add(hunk.domAnchorId);
     const state = annotationToCardState(ann);
     renderCard(hunk.domAnchorId, state);
   }
