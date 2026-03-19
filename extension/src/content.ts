@@ -20,6 +20,7 @@ import { extractHunks, resetAnchorCounter } from "./hunk-extractor.js";
 import {
   injectPrismStyles,
   renderCard,
+  removeCard,
   removeAllCards,
   type CardState,
 } from "./annotation-card.js";
@@ -171,14 +172,6 @@ function reExtractHunks(): void {
     `[PRism] Re-extraction: ${extractedHunks.length} → ${newHunks.length} hunks`,
   );
 
-  // Insert loading cards for hunks that are new in this extraction
-  const existingIds = new Set(extractedHunks.map((h) => h.domAnchorId));
-  for (const hunk of newHunks) {
-    if (hunk.domAnchorId && !existingIds.has(hunk.domAnchorId)) {
-      renderCard(hunk.domAnchorId, { kind: "loading" });
-    }
-  }
-
   extractedHunks = newHunks;
   setupHunkObserver();
   notifyVisibleHunks();
@@ -211,7 +204,6 @@ function bootstrapHunkTracking(): void {
       extractedHunks = extractHunks();
       if (extractedHunks.length > 0) {
         console.log('[PRism] Found', extractedHunks.length, 'hunks on retry', retryIndex + 1);
-        insertLoadingCards(extractedHunks);
         setupHunkObserver();
         notifyVisibleHunks();
         return;
@@ -229,7 +221,6 @@ function bootstrapHunkTracking(): void {
     return;
   }
 
-  insertLoadingCards(extractedHunks);
   setupHunkObserver();
   setupDiffMutationObserver();
   notifyVisibleHunks();
@@ -311,15 +302,6 @@ function checkPage(): void {
 
 // ---- Annotation card rendering ----------------------------------------------
 
-/** Insert loading cards for a batch of hunks. */
-function insertLoadingCards(hunks: HunkRef[]): void {
-  for (const hunk of hunks) {
-    if (hunk.domAnchorId) {
-      renderCard(hunk.domAnchorId, { kind: "loading" });
-    }
-  }
-}
-
 /**
  * Convert an Annotation to a CardState for rendering.
  */
@@ -345,38 +327,44 @@ function annotationToCardState(ann: Annotation): CardState {
 
 // ---- Degraded-state handling (WORK14) ----------------------------------------
 
+/** Remove all PRism cards except those showing ready annotations. */
+function removeNonReadyCards(): void {
+  document.querySelectorAll("tr[data-prism-card-for]").forEach((el) => {
+    if (!el.querySelector(".prism-card--ready")) {
+      el.remove();
+    }
+  });
+}
+
 /**
  * Handle DAEMON_ERROR from the background.
- * Shows the appropriate degraded-state card for affected hunks.
- * If affectedPatchHashes is undefined, updates all loading/error hunks.
+ * Silently removes cards so the extension is invisible when degraded,
+ * without wiping unrelated ready cards from successful batches.
  */
 function handleDaemonError(
   errorKind: DaemonErrorKind,
   _message: string,
-  retryAfterSec?: number,
+  _retryAfterSec?: number,
   affectedPatchHashes?: string[],
 ): void {
-  const hunksToUpdate = affectedPatchHashes
-    ? extractedHunks.filter((h) => affectedPatchHashes.includes(h.patchHash))
-    : extractedHunks;
+  console.log(`[PRism] Daemon error (${errorKind}) — hiding affected cards`);
 
-  for (const hunk of hunksToUpdate) {
-    if (!hunk.domAnchorId) continue;
+  if (errorKind === "offline") {
+    // Daemon went offline — keep already-ready cards (data is still valid),
+    // remove everything else (loading, error, etc.)
+    removeNonReadyCards();
+    return;
+  }
 
-    let state: CardState;
-    switch (errorKind) {
-      case "offline":
-        state = { kind: "offline" };
-        break;
-      case "rate_limited":
-        state = { kind: "rate_limited", retryAfterSec };
-        break;
-      default:
-        state = { kind: "error", message: "GitHub API error" };
-        break;
+  // For partial errors, only remove cards for the affected hunks
+  if (affectedPatchHashes) {
+    for (const hunk of extractedHunks) {
+      if (hunk.domAnchorId && affectedPatchHashes.includes(hunk.patchHash)) {
+        removeCard(hunk.domAnchorId);
+      }
     }
-
-    renderCard(hunk.domAnchorId, state);
+  } else {
+    removeNonReadyCards();
   }
 }
 
@@ -410,6 +398,18 @@ function handleAnnotationsUpdated(annotations: Annotation[]): void {
     }
 
     matchedHunkIds.add(hunk.domAnchorId);
+
+    // For pending/running annotations, only update cards that already exist
+    // (e.g. replacing a stale ready/error card with loading during re-analysis).
+    // Don't create new loading cards — the extension should stay invisible
+    // when the daemon hasn't produced results for this PR yet.
+    if (ann.status !== "ready" && ann.status !== "error") {
+      const existingCard = document.querySelector(
+        `tr[data-prism-card-for="${CSS.escape(hunk.domAnchorId)}"]`,
+      );
+      if (!existingCard) continue;
+    }
+
     const state = annotationToCardState(ann);
     renderCard(hunk.domAnchorId, state);
   }
