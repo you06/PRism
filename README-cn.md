@@ -21,7 +21,7 @@ npm i -g prism-code-review
 
 **2) 安装 Chrome 扩展：**
 
-1. 从 [最新 Release](https://github.com/you06/PRism/releases/latest) 下载 `prism-extension-v0.1.0.zip`
+1. 从 [最新 Release](https://github.com/you06/PRism/releases/latest) 下载 extension zip
 2. 解压
 3. 打开 `chrome://extensions`，开启 **开发者模式**
 4. 点击 **加载已解压的扩展程序**，选择解压后的文件夹

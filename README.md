@@ -21,7 +21,7 @@ npm i -g prism-code-review
 
 **2) Install the Chrome extension:**
 
-1. Download `prism-extension-v0.1.0.zip` from the [latest release](https://github.com/you06/PRism/releases/latest)
+1. Download the extension zip from the [latest release](https://github.com/you06/PRism/releases/latest)
 2. Unzip
 3. Open `chrome://extensions`, enable **Developer mode**
 4. Click **Load unpacked** and select the unzipped folder
