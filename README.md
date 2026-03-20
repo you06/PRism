@@ -11,25 +11,22 @@ It shows AI-generated summaries next to code diffs on GitHub PR **Files changed*
 
 ## 3-minute quick start
 
-### Option A: Single binary (recommended)
-
-Build a self-contained `prism` binary with [Bun](https://bun.sh):
+### Option A: Install from npm (recommended)
 
 ```bash
-pnpm install && pnpm build          # build shared types first
-cd daemon && bun build src/cli.ts --compile --outfile ../prism
+npm i -g prism-code-review
 ```
 
 Then use it (run inside a git repo):
 
 ```bash
-./prism review 42                    # review PR #42 (default: codex)
-./prism review 42 --agent claude     # use claude instead
-./prism review 42 --model gpt-4.1   # specify model
-./prism review 42 --lang cn         # output summaries in Simplified Chinese
-./prism review 42 --lang jp         # output summaries in Japanese
-./prism review owner/repo#42        # review PR from any repo
-./prism server                       # start daemon only (no analysis)
+prism review 42                    # review PR #42 (default: codex)
+prism review 42 --agent claude     # use claude instead
+prism review 42 --model gpt-4.1   # specify model
+prism review 42 --lang cn         # output summaries in Simplified Chinese
+prism review 42 --lang jp         # output summaries in Japanese
+prism review owner/repo#42        # review PR from any repo
+prism server                       # start daemon only (no analysis)
 ```
 
 `prism review` defaults to `--lang en`. Supported values are `en`, `cn`, and `jp`.

@@ -11,25 +11,22 @@ PRism 是一个个人 GitHub code review 助手。
 
 ## 3 分钟快速开始
 
-### 方式 A：单文件二进制（推荐）
-
-用 [Bun](https://bun.sh) 构建独立的 `prism` 二进制：
+### 方式 A：通过 npm 安装（推荐）
 
 ```bash
-pnpm install && pnpm build          # 先构建 shared types
-cd daemon && bun build src/cli.ts --compile --outfile ../prism
+npm i -g prism-code-review
 ```
 
 然后使用（在 git 仓库中运行）：
 
 ```bash
-./prism review 42                    # review PR #42（默认使用 codex）
-./prism review 42 --agent claude     # 使用 claude
-./prism review 42 --model gpt-4.1   # 指定模型
-./prism review 42 --lang cn         # 用简体中文输出摘要
-./prism review 42 --lang jp         # 用日语输出摘要
-./prism review owner/repo#42        # review 指定仓库的 PR
-./prism server                       # 仅启动 daemon（不分析）
+prism review 42                    # review PR #42（默认使用 codex）
+prism review 42 --agent claude     # 使用 claude
+prism review 42 --model gpt-4.1   # 指定模型
+prism review 42 --lang cn         # 用简体中文输出摘要
+prism review 42 --lang jp         # 用日语输出摘要
+prism review owner/repo#42        # review 指定仓库的 PR
+prism server                       # 仅启动 daemon（不分析）
 ```
 
 `prism review` 默认使用 `--lang en`。支持的值有 `en`、`cn` 和 `jp`。
