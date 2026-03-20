@@ -11,13 +11,22 @@ PRism 是一个个人 GitHub code review 助手。
 
 ## 3 分钟快速开始
 
-### 方式 A：通过 npm 安装（推荐）
+### 方式 A：安装（推荐）
+
+**1) 安装 CLI：**
 
 ```bash
 npm i -g prism-code-review
 ```
 
-然后使用（在 git 仓库中运行）：
+**2) 安装 Chrome 扩展：**
+
+1. 从 [最新 Release](https://github.com/you06/PRism/releases/latest) 下载 `prism-extension-v0.1.0.zip`
+2. 解压
+3. 打开 `chrome://extensions`，开启 **开发者模式**
+4. 点击 **加载已解压的扩展程序**，选择解压后的文件夹
+
+**3) 使用（在 git 仓库中运行）：**
 
 ```bash
 prism review 42                    # review PR #42（默认使用 codex）
@@ -31,43 +40,19 @@ prism server                       # 仅启动 daemon（不分析）
 
 `prism review` 默认使用 `--lang en`。支持的值有 `en`、`cn` 和 `jp`。
 
-### 方式 B：从源码运行
+打开任意 GitHub PR **Files changed** 页面，即可看到 PRism 卡片出现在 diff hunk 旁边。
 
-### 1) 安装
+### 方式 B：从源码运行
 
 ```bash
 pnpm install
 pnpm build
-```
-
-### 2) 启动 daemon
-
-```bash
 pnpm --filter @prism/daemon dev
 ```
 
-健康检查：
+健康检查：`curl http://127.0.0.1:19280/v1/health`
 
-```bash
-curl http://127.0.0.1:19280/v1/health
-```
-
-### 3) 加载扩展
-
-1. 打开 `chrome://extensions`
-2. 开启 **开发者模式**
-3. 点击 **加载已解压的扩展程序**
-4. 选择 `extension/` 目录
-
-### 4) 使用
-
-打开任意 GitHub PR **Files changed** 页面：
-
-```text
-https://github.com/<owner>/<repo>/pull/<number>/files
-```
-
-你应该能看到 PRism 卡片出现在 diff hunk 旁边。
+在 `chrome://extensions` 中加载 `extension/` 目录（开发者模式 → 加载已解压的扩展程序）。
 
 ## 前置要求
 

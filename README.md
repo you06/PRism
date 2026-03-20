@@ -11,13 +11,22 @@ It shows AI-generated summaries next to code diffs on GitHub PR **Files changed*
 
 ## 3-minute quick start
 
-### Option A: Install from npm (recommended)
+### Option A: Install (recommended)
+
+**1) Install the CLI:**
 
 ```bash
 npm i -g prism-code-review
 ```
 
-Then use it (run inside a git repo):
+**2) Install the Chrome extension:**
+
+1. Download `prism-extension-v0.1.0.zip` from the [latest release](https://github.com/you06/PRism/releases/latest)
+2. Unzip
+3. Open `chrome://extensions`, enable **Developer mode**
+4. Click **Load unpacked** and select the unzipped folder
+
+**3) Use it (run inside a git repo):**
 
 ```bash
 prism review 42                    # review PR #42 (default: codex)
@@ -31,43 +40,19 @@ prism server                       # start daemon only (no analysis)
 
 `prism review` defaults to `--lang en`. Supported values are `en`, `cn`, and `jp`.
 
-### Option B: Run from source
+Open any GitHub PR **Files changed** page to see PRism cards next to diff hunks.
 
-### 1) Install
+### Option B: Run from source
 
 ```bash
 pnpm install
 pnpm build
-```
-
-### 2) Start the daemon
-
-```bash
 pnpm --filter @prism/daemon dev
 ```
 
-Health check:
+Health check: `curl http://127.0.0.1:19280/v1/health`
 
-```bash
-curl http://127.0.0.1:19280/v1/health
-```
-
-### 3) Load the extension
-
-1. Open `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select the `extension/` directory
-
-### 4) Use it
-
-Open any GitHub PR **Files changed** page:
-
-```text
-https://github.com/<owner>/<repo>/pull/<number>/files
-```
-
-You should see PRism cards appear next to diff hunks.
+Load the extension from `extension/` directory in `chrome://extensions` (Developer mode → Load unpacked).
 
 ## Prerequisites
 
