@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./logo.png" alt="PRism" width="128" />
+</p>
+
 # PRism
 
 [中文文档](./README-cn.md)
