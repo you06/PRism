@@ -17,6 +17,8 @@ import type {
   RegisterPRResponse,
   CreateJobResponse,
   GetJobResponse,
+  ChatResponse,
+  ChatMessage,
 } from "./shared.js";
 import type { HunkRef, PRKey } from "./shared.js";
 import { DAEMON_BASE_URL } from "./shared.js";
@@ -180,4 +182,21 @@ export async function getJobStatus(
 ): Promise<GetJobResponse> {
   const res = await daemonFetch(`/v1/analysis/jobs/${encodeURIComponent(jobId)}`);
   return (await res.json()) as GetJobResponse;
+}
+
+/**
+ * POST /v1/chat
+ * Send a chat message about a specific hunk and get an AI reply.
+ */
+export async function sendChatMessage(
+  pr: PRKey,
+  filePath: string,
+  patchHash: string,
+  messages: ChatMessage[],
+): Promise<ChatResponse> {
+  const res = await daemonFetch("/v1/chat", {
+    method: "POST",
+    body: JSON.stringify({ pr, filePath, patchHash, messages }),
+  });
+  return (await res.json()) as ChatResponse;
 }

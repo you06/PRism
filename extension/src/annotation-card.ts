@@ -108,9 +108,17 @@ function buildReadyContent(data: CardAnnotation): string {
     <div class="prism-card__header">
       <span class="prism-card__label">PRism</span>
       ${riskBadge}
+      <button class="prism-card__chat-btn" data-prism-action="chat" title="Ask about this change">\u{1F4AC}</button>
     </div>
     <div class="prism-card__summary">${escapeHtml(data.summary)}</div>
     ${impactLine}
+    <div class="prism-chat-panel" style="display:none;">
+      <div class="prism-chat-panel__messages"></div>
+      <div class="prism-chat-panel__input-row">
+        <input type="text" class="prism-chat-panel__input" placeholder="Ask a question about this change\u2026" />
+        <button class="prism-chat-panel__send" data-prism-action="chat-send">Send</button>
+      </div>
+    </div>
   </div>`;
 }
 
@@ -205,4 +213,77 @@ export function removeCard(domAnchorId: string): void {
 /** Remove all PRism annotation cards from the page. */
 export function removeAllCards(): void {
   document.querySelectorAll(`tr[${CARD_ATTR}]`).forEach((el) => el.remove());
+}
+
+// ---- Chat panel helpers ----------------------------------------------------
+
+/** Toggle the chat panel visibility for a card. */
+export function toggleChatPanel(domAnchorId: string): boolean {
+  const cardRow = findCardRow(domAnchorId);
+  if (!cardRow) return false;
+
+  const panel = cardRow.querySelector<HTMLElement>(".prism-chat-panel");
+  if (!panel) return false;
+
+  const isOpen = panel.style.display !== "none";
+  panel.style.display = isOpen ? "none" : "block";
+
+  if (!isOpen) {
+    const input = panel.querySelector<HTMLInputElement>(".prism-chat-panel__input");
+    input?.focus();
+  }
+
+  return !isOpen;
+}
+
+/** Append a message bubble to the chat panel. */
+export function appendChatMessage(
+  domAnchorId: string,
+  role: "user" | "assistant",
+  content: string,
+): void {
+  const cardRow = findCardRow(domAnchorId);
+  if (!cardRow) return;
+
+  const container = cardRow.querySelector<HTMLElement>(".prism-chat-panel__messages");
+  if (!container) return;
+
+  const bubble = document.createElement("div");
+  bubble.className = `prism-chat-bubble prism-chat-bubble--${role}`;
+  bubble.textContent = content;
+  container.appendChild(bubble);
+  container.scrollTop = container.scrollHeight;
+}
+
+/** Show/hide a loading indicator in the chat panel. */
+export function setChatLoading(domAnchorId: string, loading: boolean): void {
+  const cardRow = findCardRow(domAnchorId);
+  if (!cardRow) return;
+
+  const container = cardRow.querySelector<HTMLElement>(".prism-chat-panel__messages");
+  if (!container) return;
+
+  const existing = container.querySelector(".prism-chat-bubble--loading");
+  if (loading && !existing) {
+    const bubble = document.createElement("div");
+    bubble.className = "prism-chat-bubble prism-chat-bubble--loading";
+    bubble.innerHTML = '<span class="prism-card__dot"></span> Thinking\u2026';
+    container.appendChild(bubble);
+    container.scrollTop = container.scrollHeight;
+  } else if (!loading && existing) {
+    existing.remove();
+  }
+}
+
+/** Get the input value from the chat panel and clear it. */
+export function getChatInput(domAnchorId: string): string {
+  const cardRow = findCardRow(domAnchorId);
+  if (!cardRow) return "";
+
+  const input = cardRow.querySelector<HTMLInputElement>(".prism-chat-panel__input");
+  if (!input) return "";
+
+  const value = input.value.trim();
+  input.value = "";
+  return value;
 }

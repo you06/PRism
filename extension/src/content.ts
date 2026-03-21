@@ -10,7 +10,7 @@
 //   5. Render inline annotation cards next to hunks
 // ---------------------------------------------------------------------------
 
-import type { PRKey, HunkRef, Annotation, PrismMessage, DaemonErrorKind } from "./shared.js";
+import type { PRKey, HunkRef, Annotation, PrismMessage, DaemonErrorKind, ChatMessage } from "./shared.js";
 import {
   isGitHubPRChangesPage,
   extractPRContext,
@@ -22,6 +22,10 @@ import {
   renderCard,
   removeCard,
   removeAllCards,
+  toggleChatPanel,
+  appendChatMessage,
+  setChatLoading,
+  getChatInput,
   type CardState,
 } from "./annotation-card.js";
 
@@ -47,6 +51,18 @@ let diffMutationObserver: MutationObserver | null = null;
 
 /** Timer for debounced re-extraction after DOM mutations. */
 let reExtractTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Per-hunk chat history, keyed by patchHash. */
+const chatHistories = new Map<string, ChatMessage[]>();
+
+/**
+ * Maps DOM patchHash → canonical (daemon) patchHash.
+ * Populated when annotations are fuzzy-matched so chat sends the correct hash.
+ */
+const canonicalPatchHashMap = new Map<string, string>();
+
+/** Whether chat panel was open for a given domAnchorId. */
+const chatPanelOpenState = new Map<string, boolean>();
 
 // ---- Messaging -------------------------------------------------------------
 
@@ -239,6 +255,9 @@ function teardownHunkTracking(): void {
   removeAllCards();
   extractedHunks = [];
   visibleHunkIds.clear();
+  chatHistories.clear();
+  canonicalPatchHashMap.clear();
+  chatPanelOpenState.clear();
   resetAnchorCounter();
 }
 
@@ -389,6 +408,8 @@ function handleAnnotationsUpdated(annotations: Annotation[]): void {
       if (hunk) {
         console.warn('[PRism] patchHash mismatch, fuzzy matched:', ann.filePath,
           'dom:', hunk.patchHash, 'api:', ann.patchHash);
+        // Record the canonical patchHash so chat uses the daemon's hash
+        canonicalPatchHashMap.set(hunk.patchHash, ann.patchHash);
       }
     }
 
@@ -410,8 +431,29 @@ function handleAnnotationsUpdated(annotations: Annotation[]): void {
       if (!existingCard) continue;
     }
 
+    // Save chat panel open state before re-render destroys DOM
+    const canonicalHash = canonicalPatchHashMap.get(hunk.patchHash) ?? hunk.patchHash;
+    const existingPanel = document.querySelector(
+      `tr[data-prism-card-for="${CSS.escape(hunk.domAnchorId)}"] .prism-chat-panel`,
+    ) as HTMLElement | null;
+    if (existingPanel && existingPanel.style.display !== "none") {
+      chatPanelOpenState.set(hunk.domAnchorId, true);
+    }
+
     const state = annotationToCardState(ann);
     renderCard(hunk.domAnchorId, state);
+
+    // Restore chat history and panel state after re-render
+    const history = chatHistories.get(canonicalHash);
+    if (history && history.length > 0) {
+      for (const msg of history) {
+        appendChatMessage(hunk.domAnchorId, msg.role, msg.content);
+      }
+      // Reopen panel if it was open before re-render
+      if (chatPanelOpenState.get(hunk.domAnchorId)) {
+        toggleChatPanel(hunk.domAnchorId);
+      }
+    }
   }
 }
 
@@ -447,6 +489,14 @@ chrome.runtime.onMessage.addListener(
             message.affectedPatchHashes,
           );
           break;
+
+        case "CHAT_REPLY":
+          handleChatReply(message.patchHash, message.reply);
+          break;
+
+        case "CHAT_ERROR":
+          handleChatError(message.patchHash, message.error);
+          break;
       }
     } catch (err) {
       console.error("[PRism] Message handler error (non-fatal):", err);
@@ -454,6 +504,75 @@ chrome.runtime.onMessage.addListener(
     return false;
   },
 );
+
+// ---- Chat handling ----------------------------------------------------------
+
+/** Find hunk by patchHash, checking both direct and reverse canonical mapping. */
+function findHunkByCanonicalHash(canonicalHash: string): HunkRef | undefined {
+  // Direct match
+  const direct = extractedHunks.find((h) => h.patchHash === canonicalHash);
+  if (direct) return direct;
+
+  // Reverse lookup: find DOM hash that maps to this canonical hash
+  for (const [domHash, canonical] of canonicalPatchHashMap) {
+    if (canonical === canonicalHash) {
+      return extractedHunks.find((h) => h.patchHash === domHash);
+    }
+  }
+  return undefined;
+}
+
+function handleChatReply(patchHash: string, reply: string): void {
+  const hunk = findHunkByCanonicalHash(patchHash);
+  if (!hunk?.domAnchorId) return;
+
+  // Store assistant reply in history (keyed by canonical hash)
+  const history = chatHistories.get(patchHash) ?? [];
+  history.push({ role: "assistant", content: reply });
+  chatHistories.set(patchHash, history);
+
+  setChatLoading(hunk.domAnchorId, false);
+  appendChatMessage(hunk.domAnchorId, "assistant", reply);
+}
+
+function handleChatError(patchHash: string, error: string): void {
+  const hunk = findHunkByCanonicalHash(patchHash);
+  if (!hunk?.domAnchorId) return;
+
+  setChatLoading(hunk.domAnchorId, false);
+  appendChatMessage(hunk.domAnchorId, "assistant", `Error: ${error}`);
+}
+
+function sendChatMessage(domAnchorId: string): void {
+  if (!currentContext) return;
+
+  const hunk = extractedHunks.find((h) => h.domAnchorId === domAnchorId);
+  if (!hunk) return;
+
+  const text = getChatInput(domAnchorId);
+  if (!text) return;
+
+  // Use canonical patchHash if available (fuzzy-matched hunks)
+  const canonicalHash = canonicalPatchHashMap.get(hunk.patchHash) ?? hunk.patchHash;
+
+  // Store user message in history (keyed by canonical hash)
+  const history = chatHistories.get(canonicalHash) ?? [];
+  history.push({ role: "user", content: text });
+  chatHistories.set(canonicalHash, history);
+
+  // Render user bubble and show loading
+  appendChatMessage(domAnchorId, "user", text);
+  setChatLoading(domAnchorId, true);
+
+  // Send to background with canonical patchHash
+  sendToBackground({
+    type: "CHAT_SEND",
+    pr: currentContext,
+    filePath: hunk.filePath,
+    patchHash: canonicalHash,
+    messages: history,
+  });
+}
 
 // ---- SPA navigation monitoring ---------------------------------------------
 
@@ -567,7 +686,33 @@ document.addEventListener("click", (event) => {
       renderCard(domAnchorId, { kind: "loading" });
       sendToBackground({ type: "RETRY_HUNK", pr: currentContext, hunk });
       break;
+
+    case "chat": {
+      const isNowOpen = toggleChatPanel(domAnchorId);
+      chatPanelOpenState.set(domAnchorId, isNowOpen);
+      break;
+    }
+
+    case "chat-send":
+      sendChatMessage(domAnchorId);
+      break;
   }
+});
+
+// Handle Enter key in chat input fields
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  const input = event.target as HTMLElement;
+  if (!input.classList?.contains("prism-chat-panel__input")) return;
+
+  const cardRow = input.closest<HTMLElement>("tr[data-prism-card-for]");
+  if (!cardRow) return;
+
+  const domAnchorId = cardRow.getAttribute("data-prism-card-for");
+  if (!domAnchorId) return;
+
+  event.preventDefault();
+  sendChatMessage(domAnchorId);
 });
 
 // ---- Bootstrap --------------------------------------------------------------

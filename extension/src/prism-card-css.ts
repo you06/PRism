@@ -232,6 +232,150 @@ html[data-dark-theme="dark"] .prism-card--rate-limited {
   }
 }
 
+/* ---- Chat button ---- */
+.prism-card__chat-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 1px 6px;
+  line-height: 1.3;
+  flex-shrink: 0;
+}
+.prism-card__chat-btn:hover {
+  background: rgba(128, 128, 128, 0.15);
+}
+html[data-color-mode="dark"] .prism-card__chat-btn,
+html[data-dark-theme="dark"] .prism-card__chat-btn {
+  border-color: #30363d;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-color-mode="auto"] .prism-card__chat-btn {
+    border-color: #30363d;
+  }
+}
+
+/* ---- Chat panel ---- */
+.prism-chat-panel {
+  width: 100%;
+  margin-top: 6px;
+  border-top: 1px solid #d0d7de;
+  padding-top: 6px;
+}
+html[data-color-mode="dark"] .prism-chat-panel,
+html[data-dark-theme="dark"] .prism-chat-panel {
+  border-top-color: #30363d;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-color-mode="auto"] .prism-chat-panel {
+    border-top-color: #30363d;
+  }
+}
+
+.prism-chat-panel__messages {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.prism-chat-bubble {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  max-width: 85%;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+.prism-chat-bubble--user {
+  align-self: flex-end;
+  background: #0969da;
+  color: #fff;
+}
+.prism-chat-bubble--assistant {
+  align-self: flex-start;
+  background: #eaeef2;
+  color: #1f2328;
+}
+html[data-color-mode="dark"] .prism-chat-bubble--assistant,
+html[data-dark-theme="dark"] .prism-chat-bubble--assistant {
+  background: #21262d;
+  color: #e6edf3;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-color-mode="auto"] .prism-chat-bubble--assistant {
+    background: #21262d;
+    color: #e6edf3;
+  }
+}
+
+.prism-chat-bubble--loading {
+  align-self: flex-start;
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.prism-chat-panel__input-row {
+  display: flex;
+  gap: 4px;
+}
+.prism-chat-panel__input {
+  flex: 1;
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid #d0d7de;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  outline: none;
+}
+.prism-chat-panel__input:focus {
+  border-color: #0969da;
+  box-shadow: 0 0 0 1px #0969da;
+}
+html[data-color-mode="dark"] .prism-chat-panel__input,
+html[data-dark-theme="dark"] .prism-chat-panel__input {
+  border-color: #30363d;
+}
+html[data-color-mode="dark"] .prism-chat-panel__input:focus,
+html[data-dark-theme="dark"] .prism-chat-panel__input:focus {
+  border-color: #58a6ff;
+  box-shadow: 0 0 0 1px #58a6ff;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-color-mode="auto"] .prism-chat-panel__input {
+    border-color: #30363d;
+  }
+  html[data-color-mode="auto"] .prism-chat-panel__input:focus {
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 1px #58a6ff;
+  }
+}
+
+.prism-chat-panel__send {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid #d0d7de;
+  background: #0969da;
+  color: #fff;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.prism-chat-panel__send:hover {
+  background: #0860c5;
+}
+
 /* ---- Card row cell reset ---- */
 td.prism-card-cell {
   padding: 0 !important;
