@@ -11,7 +11,7 @@ It shows AI-generated summaries next to code diffs on GitHub PR **Files changed*
 
 ## 3-minute quick start
 
-### Option A: Install (recommended)
+### Install
 
 **1) Install the CLI:**
 
@@ -34,25 +34,11 @@ prism review 42 --agent claude     # use claude instead
 prism review 42 --model gpt-4.1   # specify model
 prism review 42 --lang cn         # output summaries in Simplified Chinese
 prism review 42 --lang jp         # output summaries in Japanese
-prism review owner/repo#42        # review PR from any repo
-prism server                       # start daemon only (no analysis)
 ```
 
 `prism review` defaults to `--lang en`. Supported values are `en`, `cn`, and `jp`.
 
 Open any GitHub PR **Files changed** page to see PRism cards next to diff hunks.
-
-### Option B: Run from source
-
-```bash
-pnpm install
-pnpm build
-pnpm --filter @prism/daemon dev
-```
-
-Health check: `curl http://127.0.0.1:19280/v1/health`
-
-Load the extension from `extension/` directory in `chrome://extensions` (Developer mode → Load unpacked).
 
 ## Prerequisites
 
