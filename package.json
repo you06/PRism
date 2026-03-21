@@ -5,7 +5,7 @@
   "description": "GitHub code review assistant \u2014 AI-generated hunk summaries on PR Changes pages",
   "scripts": {
     "build": "pnpm -r run build",
-    "typecheck": "pnpm -r run typecheck",
+    "typecheck": "pnpm --filter @prism/shared build && pnpm -r run typecheck",
     "clean": "pnpm -r run clean"
   },
   "engines": {

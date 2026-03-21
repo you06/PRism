@@ -596,16 +596,21 @@ export async function handleChat(
     (h) => h.filePath === filePath && h.patchHash === patchHash,
   );
 
-  // Build patch text from canonical hunk (or use empty if not found)
-  let patch = "";
-  if (hunk) {
-    patch = hunk.lines
-      .map((line) => {
-        const prefix = line.type === "add" ? "+" : line.type === "delete" ? "-" : " ";
-        return prefix + line.content;
-      })
-      .join("\n");
+  if (!hunk) {
+    return apiError(
+      res,
+      404,
+      "HUNK_NOT_FOUND",
+      `No hunk found for ${filePath} with patchHash ${patchHash}`,
+    );
   }
+
+  const patch = hunk.lines
+    .map((line) => {
+      const prefix = line.type === "add" ? "+" : line.type === "delete" ? "-" : " ";
+      return prefix + line.content;
+    })
+    .join("\n");
 
   // Look up existing annotation for extra context
   const existingAnnotation = ctx.annotations.get(
