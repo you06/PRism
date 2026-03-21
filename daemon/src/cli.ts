@@ -259,6 +259,7 @@ async function main(): Promise<void> {
       console.log("  no hunks to analyze.");
       console.log("Opening browser...");
       openBrowser(prUrl);
+      console.log("\nReview is ready. Press Ctrl+C to exit.");
       return;
     }
 
@@ -316,7 +317,9 @@ async function main(): Promise<void> {
     console.log("Opening browser...");
     openBrowser(prUrl);
 
-    await shutdownDaemon(daemon);
+    // Keep daemon running so the extension can fetch annotations.
+    // User presses Ctrl+C to exit.
+    console.log("\nReview is ready. Press Ctrl+C to exit.");
     return;
   }
 
