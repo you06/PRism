@@ -395,20 +395,24 @@ async function handleChatSend(
   const effectivePr = state.pr ?? pr;
 
   try {
-    const response = await api.sendChatMessage(effectivePr, filePath, patchHash, messages);
-    sendToTab(tabId, {
-      type: "CHAT_REPLY",
+    await api.sendChatMessageStream(
+      effectivePr,
+      filePath,
       patchHash,
-      reply: response.reply,
-      model: response.model,
-    });
+      messages,
+      (chunk) => {
+        sendToTab(tabId, { type: "CHAT_REPLY_CHUNK", patchHash, chunk });
+      },
+      (model) => {
+        sendToTab(tabId, { type: "CHAT_REPLY_DONE", patchHash, model });
+      },
+      (error) => {
+        sendToTab(tabId, { type: "CHAT_ERROR", patchHash, error });
+      },
+    );
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Chat request failed";
-    sendToTab(tabId, {
-      type: "CHAT_ERROR",
-      patchHash,
-      error: errorMsg,
-    });
+    sendToTab(tabId, { type: "CHAT_ERROR", patchHash, error: errorMsg });
   }
 }
 

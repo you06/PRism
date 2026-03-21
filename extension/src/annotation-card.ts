@@ -113,6 +113,11 @@ function buildReadyContent(data: CardAnnotation): string {
     <div class="prism-card__summary">${escapeHtml(data.summary)}</div>
     ${impactLine}
     <div class="prism-chat-panel" style="display:none;">
+      <div class="prism-chat-panel__suggestions">
+        <button class="prism-chat-panel__suggestion" data-prism-action="chat-suggest">Why was this change made?</button>
+        <button class="prism-chat-panel__suggestion" data-prism-action="chat-suggest">Are there any edge cases?</button>
+        <button class="prism-chat-panel__suggestion" data-prism-action="chat-suggest">What could break?</button>
+      </div>
       <div class="prism-chat-panel__messages"></div>
       <div class="prism-chat-panel__input-row">
         <input type="text" class="prism-chat-panel__input" placeholder="Ask a question about this change\u2026" />
@@ -236,6 +241,40 @@ export function toggleChatPanel(domAnchorId: string): boolean {
   return !isOpen;
 }
 
+/**
+ * Render basic markdown to HTML for assistant replies.
+ * Supports: code blocks (```), inline code (`), bold (**), italic (*), line breaks.
+ */
+function renderMarkdown(text: string): string {
+  let html = escapeHtml(text);
+
+  // Code blocks: ```lang\n...\n```
+  html = html.replace(
+    /```(?:\w*)\n([\s\S]*?)```/g,
+    '<pre class="prism-chat-code"><code>$1</code></pre>',
+  );
+
+  // Inline code: `...`
+  html = html.replace(/`([^`]+)`/g, '<code class="prism-chat-inline-code">$1</code>');
+
+  // Bold: **...**
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+  // Italic: *...*
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+  // Line breaks (but not inside <pre>)
+  html = html.replace(/\n/g, "<br>");
+
+  return html;
+}
+
+/** Hide the suggested questions for a card. */
+function hideSuggestions(cardRow: Element): void {
+  const suggestions = cardRow.querySelector<HTMLElement>(".prism-chat-panel__suggestions");
+  if (suggestions) suggestions.style.display = "none";
+}
+
 /** Append a message bubble to the chat panel. */
 export function appendChatMessage(
   domAnchorId: string,
@@ -248,9 +287,16 @@ export function appendChatMessage(
   const container = cardRow.querySelector<HTMLElement>(".prism-chat-panel__messages");
   if (!container) return;
 
+  // Hide suggestions once conversation starts
+  hideSuggestions(cardRow);
+
   const bubble = document.createElement("div");
   bubble.className = `prism-chat-bubble prism-chat-bubble--${role}`;
-  bubble.textContent = content;
+  if (role === "assistant") {
+    bubble.innerHTML = renderMarkdown(content);
+  } else {
+    bubble.textContent = content;
+  }
   container.appendChild(bubble);
   container.scrollTop = container.scrollHeight;
 }
@@ -273,6 +319,61 @@ export function setChatLoading(domAnchorId: string, loading: boolean): void {
   } else if (!loading && existing) {
     existing.remove();
   }
+}
+
+const STREAMING_ATTR = "data-prism-streaming";
+
+/**
+ * Append a text chunk to the current streaming assistant bubble.
+ * Creates the bubble on first chunk (replaces loading indicator).
+ */
+export function appendStreamingChunk(domAnchorId: string, chunk: string): void {
+  const cardRow = findCardRow(domAnchorId);
+  if (!cardRow) return;
+
+  const container = cardRow.querySelector<HTMLElement>(".prism-chat-panel__messages");
+  if (!container) return;
+
+  // Hide suggestions on first chunk
+  hideSuggestions(cardRow);
+
+  // Remove loading indicator if present
+  const loading = container.querySelector(".prism-chat-bubble--loading");
+  if (loading) loading.remove();
+
+  // Find or create the streaming bubble
+  let bubble = container.querySelector<HTMLElement>(`[${STREAMING_ATTR}]`);
+  if (!bubble) {
+    bubble = document.createElement("div");
+    bubble.className = "prism-chat-bubble prism-chat-bubble--assistant";
+    bubble.setAttribute(STREAMING_ATTR, "true");
+    container.appendChild(bubble);
+  }
+
+  // Append raw text (will be rendered as markdown on finalize)
+  const raw = (bubble.getAttribute("data-raw-text") ?? "") + chunk;
+  bubble.setAttribute("data-raw-text", raw);
+  bubble.innerHTML = renderMarkdown(raw);
+  container.scrollTop = container.scrollHeight;
+}
+
+/**
+ * Finalize the streaming bubble — remove the streaming marker.
+ * Returns the accumulated text for storage in chat history.
+ */
+export function finalizeStreamingBubble(domAnchorId: string): string {
+  const cardRow = findCardRow(domAnchorId);
+  if (!cardRow) return "";
+
+  const bubble = cardRow.querySelector<HTMLElement>(`[${STREAMING_ATTR}]`);
+  if (!bubble) return "";
+
+  const raw = bubble.getAttribute("data-raw-text") ?? "";
+  bubble.removeAttribute(STREAMING_ATTR);
+  bubble.removeAttribute("data-raw-text");
+  // Final render
+  bubble.innerHTML = renderMarkdown(raw);
+  return raw;
 }
 
 /** Get the input value from the chat panel and clear it. */

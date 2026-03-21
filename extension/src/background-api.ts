@@ -200,3 +200,80 @@ export async function sendChatMessage(
   });
   return (await res.json()) as ChatResponse;
 }
+
+/**
+ * POST /v1/chat/stream
+ * Stream a chat response. Calls onChunk with text as it arrives,
+ * onDone when complete, onError on failure.
+ */
+export async function sendChatMessageStream(
+  pr: PRKey,
+  filePath: string,
+  patchHash: string,
+  messages: ChatMessage[],
+  onChunk: (text: string) => void,
+  onDone: (model: string) => void,
+  onError: (error: string) => void,
+): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(`${DAEMON_BASE_URL}/v1/chat/stream`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-PRism-Client": "extension" },
+      body: JSON.stringify({ pr, filePath, patchHash, messages }),
+    });
+  } catch {
+    onError("PRism daemon is not running.");
+    return;
+  }
+
+  if (!res.ok || !res.body) {
+    let errorMsg = `Daemon returned HTTP ${res.status}`;
+    try {
+      const body = (await res.json()) as { error?: string };
+      errorMsg = body.error || errorMsg;
+    } catch { /* ignore */ }
+    onError(errorMsg);
+    return;
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    // Parse SSE events: "data: {...}\n\n"
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+
+    for (const event of events) {
+      const line = event.trim();
+      if (!line.startsWith("data: ")) continue;
+      const jsonStr = line.slice(6);
+      try {
+        const data = JSON.parse(jsonStr) as {
+          chunk?: string;
+          done?: boolean;
+          model?: string;
+          error?: string;
+        };
+        if (data.error) {
+          onError(data.error);
+          return;
+        }
+        if (data.chunk) {
+          onChunk(data.chunk);
+        }
+        if (data.done && data.model) {
+          onDone(data.model);
+          return;
+        }
+      } catch { /* skip malformed */ }
+    }
+  }
+}

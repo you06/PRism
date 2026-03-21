@@ -137,6 +137,18 @@ export type PrismMessage =
       model: string;
     }
   | {
+      /** Streamed chunk of a chat reply. */
+      type: "CHAT_REPLY_CHUNK";
+      patchHash: string;
+      chunk: string;
+    }
+  | {
+      /** Streamed chat response is complete. */
+      type: "CHAT_REPLY_DONE";
+      patchHash: string;
+      model: string;
+    }
+  | {
       type: "CHAT_ERROR";
       patchHash: string;
       error: string;
