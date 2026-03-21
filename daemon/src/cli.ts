@@ -82,10 +82,6 @@ function printUsage(): void {
   console.log(
     "  prism review <pr_number> [--agent codex|claude] [--model <model>] [--lang en|cn|jp]",
   );
-  console.log(
-    "  prism review owner/repo#<pr_number> [--agent codex|claude] [--model <model>] [--lang en|cn|jp]",
-  );
-  console.log("  prism server                          — start daemon only");
   process.exit(1);
 }
 
