@@ -52,7 +52,7 @@ import {
   validateVisibleHunks,
   validateHunkTargets,
 } from "./validation.js";
-import { runChat } from "./chat-handler.js";
+import { runChat, runChatStream } from "./chat-handler.js";
 
 // ---- Route context (injected from index.ts) ---------------------------------
 
@@ -648,6 +648,105 @@ export async function handleChat(
   }
 
   return apiError(res, 500, "CHAT_FAILED", result.error);
+}
+
+// ---- POST /v1/chat/stream ---------------------------------------------------
+
+export async function handleChatStream(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  ctx: RouteContext,
+): Promise<void> {
+  const raw = await readBody(req);
+  const parsed = parseJsonBody(raw);
+  if (!parsed.ok) {
+    return apiError(res, 400, "BAD_REQUEST", "Invalid JSON body.");
+  }
+  const body = parsed.value as Record<string, unknown>;
+
+  const prErr = validatePRKeyWithSha(body["pr"]);
+  if (prErr) {
+    return apiError(res, 400, "BAD_REQUEST", `${prErr.field}: ${prErr.message}`);
+  }
+  if (typeof body["filePath"] !== "string" || !body["filePath"]) {
+    return apiError(res, 400, "BAD_REQUEST", "filePath: required string");
+  }
+  if (typeof body["patchHash"] !== "string" || !body["patchHash"]) {
+    return apiError(res, 400, "BAD_REQUEST", "patchHash: required string");
+  }
+  if (!Array.isArray(body["messages"]) || body["messages"].length === 0) {
+    return apiError(res, 400, "BAD_REQUEST", "messages: required non-empty array");
+  }
+
+  const pr = body["pr"] as PRKey;
+  const filePath = body["filePath"] as string;
+  const patchHash = body["patchHash"] as string;
+  const messages = body["messages"] as ChatMessage[];
+  const agent = (body["agent"] as "codex" | "claude") || "codex";
+  const model = body["model"] as string | undefined;
+  const language = (body["language"] as string) || "English";
+
+  let registered;
+  try {
+    registered = await ensureRegistered(pr, ctx);
+  } catch (err) {
+    return handleGitHubError(res, err);
+  }
+
+  const hunk = registered.canonicalHunks.find(
+    (h) => h.filePath === filePath && h.patchHash === patchHash,
+  );
+
+  if (!hunk) {
+    return apiError(res, 404, "HUNK_NOT_FOUND",
+      `No hunk found for ${filePath} with patchHash ${patchHash}`);
+  }
+
+  const patch = hunk.lines
+    .map((line) => {
+      const prefix = line.type === "add" ? "+" : line.type === "delete" ? "-" : " ";
+      return prefix + line.content;
+    })
+    .join("\n");
+
+  const existingAnnotation = ctx.annotations.get(
+    registered.prKey.headSha, filePath, patchHash);
+
+  // Start SSE response
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+  });
+
+  await runChatStream(
+    {
+      promptInput: {
+        prTitle: registered.metadata.title,
+        prDescription: registered.metadata.body,
+        filePath,
+        patch,
+        annotation: existingAnnotation
+          ? { summary: existingAnnotation.summary, impact: existingAnnotation.impact, risk: existingAnnotation.risk }
+          : undefined,
+        language,
+      },
+      messages,
+      agent,
+      model,
+    },
+    (chunk) => {
+      res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+    },
+    (modelName) => {
+      res.write(`data: ${JSON.stringify({ done: true, model: modelName })}\n\n`);
+      res.end();
+    },
+    (error, modelName) => {
+      res.write(`data: ${JSON.stringify({ error, model: modelName })}\n\n`);
+      res.end();
+    },
+  );
 }
 
 // ---- GitHub error → HTTP response (WORK14: consistent error format) ---------

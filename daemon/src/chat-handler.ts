@@ -71,6 +71,19 @@ function buildCommand(
   return { cmd: "claude", args };
 }
 
+// ---- Prompt builder ---------------------------------------------------------
+
+function buildFullPrompt(input: ChatInput): string {
+  const systemPrompt = buildChatSystemPrompt(input.promptInput);
+  const parts: string[] = [systemPrompt, ""];
+  for (const msg of input.messages) {
+    const prefix = msg.role === "user" ? "User" : "Assistant";
+    parts.push(`${prefix}: ${msg.content}`);
+  }
+  parts.push("Assistant:");
+  return parts.join("\n\n");
+}
+
 // ---- Chat invocation --------------------------------------------------------
 
 export interface ChatInput {
@@ -94,14 +107,12 @@ export interface ChatError {
 
 /**
  * Run a chat conversation about a specific hunk via the CLI agent.
- *
- * Builds a full prompt with system context + conversation history,
- * sends it to the agent, and returns the raw text reply.
+ * Returns the full reply after the CLI process exits.
  */
 export async function runChat(
   input: ChatInput,
 ): Promise<ChatResult | ChatError> {
-  const { agent, model, messages, promptInput } = input;
+  const { agent, model } = input;
   const modelLabel = model ?? `${agent}-default`;
 
   const bin = agent === "codex" ? "codex" : "claude";
@@ -113,18 +124,7 @@ export async function runChat(
     };
   }
 
-  // Build full prompt: system context + conversation
-  const systemPrompt = buildChatSystemPrompt(promptInput);
-
-  const parts: string[] = [systemPrompt, ""];
-  for (const msg of messages) {
-    const prefix = msg.role === "user" ? "User" : "Assistant";
-    parts.push(`${prefix}: ${msg.content}`);
-  }
-  // Add final instruction for the assistant to respond
-  parts.push("Assistant:");
-
-  const fullPrompt = parts.join("\n\n");
+  const fullPrompt = buildFullPrompt(input);
 
   try {
     const { cmd, args } = buildCommand(agent, model);
@@ -146,4 +146,60 @@ export async function runChat(
     }
     return { ok: false, error: `${agent} error: ${msg}`, model: modelLabel };
   }
+}
+
+/**
+ * Run a streaming chat — invokes the CLI and calls `onChunk` with each
+ * stdout chunk as it arrives. Calls `onDone` when the process exits.
+ */
+export async function runChatStream(
+  input: ChatInput,
+  onChunk: (text: string) => void,
+  onDone: (model: string) => void,
+  onError: (error: string, model: string) => void,
+): Promise<void> {
+  const { agent, model } = input;
+  const modelLabel = model ?? `${agent}-default`;
+
+  const bin = agent === "codex" ? "codex" : "claude";
+  if (!(await binaryExists(bin))) {
+    onError(`CLI binary '${bin}' not found on PATH.`, modelLabel);
+    return;
+  }
+
+  const fullPrompt = buildFullPrompt(input);
+  const { cmd, args } = buildCommand(agent, model);
+
+  const proc = spawn(cmd, args, {
+    stdio: ["pipe", "pipe", "pipe"],
+    timeout: CHAT_TIMEOUT_MS,
+  });
+
+  const stderr: Buffer[] = [];
+
+  proc.stdout.on("data", (d: Buffer) => {
+    onChunk(d.toString("utf-8"));
+  });
+  proc.stderr.on("data", (d: Buffer) => stderr.push(d));
+
+  proc.on("error", (err) => {
+    const msg = err.message;
+    if (msg.includes("TIMEOUT") || msg.includes("timed out")) {
+      onError(`${agent} timed out`, modelLabel);
+    } else {
+      onError(`${agent} error: ${msg}`, modelLabel);
+    }
+  });
+
+  proc.on("close", (code) => {
+    if (code !== 0) {
+      const stderrText = Buffer.concat(stderr).toString("utf-8");
+      onError(`${cmd} exited with code ${code}: ${stderrText.slice(0, 500)}`, modelLabel);
+    } else {
+      onDone(modelLabel);
+    }
+  });
+
+  proc.stdin.write(fullPrompt);
+  proc.stdin.end();
 }

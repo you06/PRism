@@ -274,6 +274,46 @@ html[data-dark-theme="dark"] .prism-chat-panel {
   }
 }
 
+/* ---- Suggested questions ---- */
+.prism-chat-panel__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.prism-chat-panel__suggestion {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  border: 1px solid #d0d7de;
+  background: transparent;
+  color: #0969da;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1.4;
+}
+.prism-chat-panel__suggestion:hover {
+  background: rgba(9, 105, 218, 0.08);
+}
+html[data-color-mode="dark"] .prism-chat-panel__suggestion,
+html[data-dark-theme="dark"] .prism-chat-panel__suggestion {
+  border-color: #30363d;
+  color: #58a6ff;
+}
+html[data-color-mode="dark"] .prism-chat-panel__suggestion:hover,
+html[data-dark-theme="dark"] .prism-chat-panel__suggestion:hover {
+  background: rgba(88, 166, 255, 0.1);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-color-mode="auto"] .prism-chat-panel__suggestion {
+    border-color: #30363d;
+    color: #58a6ff;
+  }
+  html[data-color-mode="auto"] .prism-chat-panel__suggestion:hover {
+    background: rgba(88, 166, 255, 0.1);
+  }
+}
+
 .prism-chat-panel__messages {
   max-height: 200px;
   overflow-y: auto;
@@ -320,6 +360,47 @@ html[data-dark-theme="dark"] .prism-chat-bubble--assistant {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ---- Markdown in chat bubbles ---- */
+.prism-chat-bubble--assistant {
+  white-space: normal;
+}
+.prism-chat-code {
+  display: block;
+  margin: 4px 0;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  overflow-x: auto;
+  white-space: pre;
+  background: rgba(0, 0, 0, 0.06);
+}
+html[data-color-mode="dark"] .prism-chat-code,
+html[data-dark-theme="dark"] .prism-chat-code {
+  background: rgba(255, 255, 255, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-color-mode="auto"] .prism-chat-code {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+.prism-chat-inline-code {
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  background: rgba(0, 0, 0, 0.06);
+}
+html[data-color-mode="dark"] .prism-chat-inline-code,
+html[data-dark-theme="dark"] .prism-chat-inline-code {
+  background: rgba(255, 255, 255, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  html[data-color-mode="auto"] .prism-chat-inline-code {
+    background: rgba(255, 255, 255, 0.06);
+  }
 }
 
 .prism-chat-panel__input-row {

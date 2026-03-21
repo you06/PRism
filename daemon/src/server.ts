@@ -16,6 +16,7 @@ import {
   handleGetJob,
   handleGetAnnotations,
   handleChat,
+  handleChatStream,
   json,
   type RouteContext,
 } from "./routes.js";
@@ -93,6 +94,14 @@ export function createDaemon(): DaemonInstance {
 
     if (method === "POST" && pathname === "/v1/chat") {
       handleChat(req, res, ctx).catch(() => {
+        if (!res.headersSent)
+          json(res, 500, { error: "Internal server error.", code: "INTERNAL_ERROR" });
+      });
+      return;
+    }
+
+    if (method === "POST" && pathname === "/v1/chat/stream") {
+      handleChatStream(req, res, ctx).catch(() => {
         if (!res.headersSent)
           json(res, 500, { error: "Internal server error.", code: "INTERNAL_ERROR" });
       });

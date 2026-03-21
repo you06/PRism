@@ -26,6 +26,8 @@ import {
   appendChatMessage,
   setChatLoading,
   getChatInput,
+  appendStreamingChunk,
+  finalizeStreamingBubble,
   type CardState,
 } from "./annotation-card.js";
 
@@ -63,6 +65,9 @@ const canonicalPatchHashMap = new Map<string, string>();
 
 /** Whether chat panel was open for a given domAnchorId. */
 const chatPanelOpenState = new Map<string, boolean>();
+
+/** Hunks with an in-flight chat stream (keyed by canonical patchHash). */
+const chatInFlight = new Set<string>();
 
 // ---- Messaging -------------------------------------------------------------
 
@@ -494,6 +499,14 @@ chrome.runtime.onMessage.addListener(
           handleChatReply(message.patchHash, message.reply);
           break;
 
+        case "CHAT_REPLY_CHUNK":
+          handleChatChunk(message.patchHash, message.chunk);
+          break;
+
+        case "CHAT_REPLY_DONE":
+          handleChatDone(message.patchHash);
+          break;
+
         case "CHAT_ERROR":
           handleChatError(message.patchHash, message.error);
           break;
@@ -535,11 +548,36 @@ function handleChatReply(patchHash: string, reply: string): void {
   appendChatMessage(hunk.domAnchorId, "assistant", reply);
 }
 
+function handleChatChunk(patchHash: string, chunk: string): void {
+  const hunk = findHunkByCanonicalHash(patchHash);
+  if (!hunk?.domAnchorId) return;
+
+  appendStreamingChunk(hunk.domAnchorId, chunk);
+}
+
+function handleChatDone(patchHash: string): void {
+  chatInFlight.delete(patchHash);
+
+  const hunk = findHunkByCanonicalHash(patchHash);
+  if (!hunk?.domAnchorId) return;
+
+  const fullText = finalizeStreamingBubble(hunk.domAnchorId);
+
+  // Store complete assistant reply in history
+  const history = chatHistories.get(patchHash) ?? [];
+  history.push({ role: "assistant", content: fullText });
+  chatHistories.set(patchHash, history);
+}
+
 function handleChatError(patchHash: string, error: string): void {
+  chatInFlight.delete(patchHash);
+
   const hunk = findHunkByCanonicalHash(patchHash);
   if (!hunk?.domAnchorId) return;
 
   setChatLoading(hunk.domAnchorId, false);
+  // Finalize any partial streaming bubble
+  finalizeStreamingBubble(hunk.domAnchorId);
   appendChatMessage(hunk.domAnchorId, "assistant", `Error: ${error}`);
 }
 
@@ -554,6 +592,10 @@ function sendChatMessage(domAnchorId: string): void {
 
   // Use canonical patchHash if available (fuzzy-matched hunks)
   const canonicalHash = canonicalPatchHashMap.get(hunk.patchHash) ?? hunk.patchHash;
+
+  // Prevent concurrent streams for the same hunk
+  if (chatInFlight.has(canonicalHash)) return;
+  chatInFlight.add(canonicalHash);
 
   // Store user message in history (keyed by canonical hash)
   const history = chatHistories.get(canonicalHash) ?? [];
@@ -696,6 +738,16 @@ document.addEventListener("click", (event) => {
     case "chat-send":
       sendChatMessage(domAnchorId);
       break;
+
+    case "chat-suggest": {
+      const suggestionText = btn.textContent?.trim();
+      if (!suggestionText) break;
+      // Set the input value and send
+      const input = cardRow.querySelector<HTMLInputElement>(".prism-chat-panel__input");
+      if (input) input.value = suggestionText;
+      sendChatMessage(domAnchorId);
+      break;
+    }
   }
 });
 
