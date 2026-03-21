@@ -66,6 +66,9 @@ const canonicalPatchHashMap = new Map<string, string>();
 /** Whether chat panel was open for a given domAnchorId. */
 const chatPanelOpenState = new Map<string, boolean>();
 
+/** Hunks with an in-flight chat stream (keyed by canonical patchHash). */
+const chatInFlight = new Set<string>();
+
 // ---- Messaging -------------------------------------------------------------
 
 /** Send a typed message to the background service worker. */
@@ -553,6 +556,8 @@ function handleChatChunk(patchHash: string, chunk: string): void {
 }
 
 function handleChatDone(patchHash: string): void {
+  chatInFlight.delete(patchHash);
+
   const hunk = findHunkByCanonicalHash(patchHash);
   if (!hunk?.domAnchorId) return;
 
@@ -565,6 +570,8 @@ function handleChatDone(patchHash: string): void {
 }
 
 function handleChatError(patchHash: string, error: string): void {
+  chatInFlight.delete(patchHash);
+
   const hunk = findHunkByCanonicalHash(patchHash);
   if (!hunk?.domAnchorId) return;
 
@@ -585,6 +592,10 @@ function sendChatMessage(domAnchorId: string): void {
 
   // Use canonical patchHash if available (fuzzy-matched hunks)
   const canonicalHash = canonicalPatchHashMap.get(hunk.patchHash) ?? hunk.patchHash;
+
+  // Prevent concurrent streams for the same hunk
+  if (chatInFlight.has(canonicalHash)) return;
+  chatInFlight.add(canonicalHash);
 
   // Store user message in history (keyed by canonical hash)
   const history = chatHistories.get(canonicalHash) ?? [];

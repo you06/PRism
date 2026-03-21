@@ -241,6 +241,8 @@ export async function sendChatMessageStream(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  let terminated = false;
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -264,6 +266,7 @@ export async function sendChatMessageStream(
         };
         if (data.error) {
           onError(data.error);
+          terminated = true;
           return;
         }
         if (data.chunk) {
@@ -271,9 +274,15 @@ export async function sendChatMessageStream(
         }
         if (data.done && data.model) {
           onDone(data.model);
+          terminated = true;
           return;
         }
       } catch { /* skip malformed */ }
     }
+  }
+
+  // Stream ended without a done or error event — treat as error
+  if (!terminated) {
+    onError("Stream ended unexpectedly without a response.");
   }
 }
