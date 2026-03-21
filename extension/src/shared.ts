@@ -88,6 +88,16 @@ export type GetJobResponse = Pick<
   "jobId" | "status" | "completed" | "total" | "failed"
 >;
 
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatResponse {
+  reply: string;
+  model: string;
+}
+
 export type DaemonErrorKind =
   | "offline"
   | "auth_failed"
@@ -112,6 +122,24 @@ export type PrismMessage =
       message: string;
       retryAfterSec?: number;
       affectedPatchHashes?: string[];
+    }
+  | {
+      type: "CHAT_SEND";
+      pr: PRKey;
+      filePath: string;
+      patchHash: string;
+      messages: ChatMessage[];
+    }
+  | {
+      type: "CHAT_REPLY";
+      patchHash: string;
+      reply: string;
+      model: string;
+    }
+  | {
+      type: "CHAT_ERROR";
+      patchHash: string;
+      error: string;
     };
 
 export const DAEMON_DEFAULT_PORT = 19280;

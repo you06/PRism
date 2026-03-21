@@ -10,7 +10,7 @@
 //   5. Render inline annotation cards next to hunks
 // ---------------------------------------------------------------------------
 
-import type { PRKey, HunkRef, Annotation, PrismMessage, DaemonErrorKind } from "./shared.js";
+import type { PRKey, HunkRef, Annotation, PrismMessage, DaemonErrorKind, ChatMessage } from "./shared.js";
 import {
   isGitHubPRChangesPage,
   extractPRContext,
@@ -22,6 +22,10 @@ import {
   renderCard,
   removeCard,
   removeAllCards,
+  toggleChatPanel,
+  appendChatMessage,
+  setChatLoading,
+  getChatInput,
   type CardState,
 } from "./annotation-card.js";
 
@@ -47,6 +51,9 @@ let diffMutationObserver: MutationObserver | null = null;
 
 /** Timer for debounced re-extraction after DOM mutations. */
 let reExtractTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Per-hunk chat history, keyed by patchHash. */
+const chatHistories = new Map<string, ChatMessage[]>();
 
 // ---- Messaging -------------------------------------------------------------
 
@@ -239,6 +246,7 @@ function teardownHunkTracking(): void {
   removeAllCards();
   extractedHunks = [];
   visibleHunkIds.clear();
+  chatHistories.clear();
   resetAnchorCounter();
 }
 
@@ -447,6 +455,14 @@ chrome.runtime.onMessage.addListener(
             message.affectedPatchHashes,
           );
           break;
+
+        case "CHAT_REPLY":
+          handleChatReply(message.patchHash, message.reply);
+          break;
+
+        case "CHAT_ERROR":
+          handleChatError(message.patchHash, message.error);
+          break;
       }
     } catch (err) {
       console.error("[PRism] Message handler error (non-fatal):", err);
@@ -454,6 +470,57 @@ chrome.runtime.onMessage.addListener(
     return false;
   },
 );
+
+// ---- Chat handling ----------------------------------------------------------
+
+function handleChatReply(patchHash: string, reply: string): void {
+  const hunk = extractedHunks.find((h) => h.patchHash === patchHash);
+  if (!hunk?.domAnchorId) return;
+
+  // Store assistant reply in history
+  const history = chatHistories.get(patchHash) ?? [];
+  history.push({ role: "assistant", content: reply });
+  chatHistories.set(patchHash, history);
+
+  setChatLoading(hunk.domAnchorId, false);
+  appendChatMessage(hunk.domAnchorId, "assistant", reply);
+}
+
+function handleChatError(patchHash: string, error: string): void {
+  const hunk = extractedHunks.find((h) => h.patchHash === patchHash);
+  if (!hunk?.domAnchorId) return;
+
+  setChatLoading(hunk.domAnchorId, false);
+  appendChatMessage(hunk.domAnchorId, "assistant", `Error: ${error}`);
+}
+
+function sendChatMessage(domAnchorId: string): void {
+  if (!currentContext) return;
+
+  const hunk = extractedHunks.find((h) => h.domAnchorId === domAnchorId);
+  if (!hunk) return;
+
+  const text = getChatInput(domAnchorId);
+  if (!text) return;
+
+  // Store user message in history
+  const history = chatHistories.get(hunk.patchHash) ?? [];
+  history.push({ role: "user", content: text });
+  chatHistories.set(hunk.patchHash, history);
+
+  // Render user bubble and show loading
+  appendChatMessage(domAnchorId, "user", text);
+  setChatLoading(domAnchorId, true);
+
+  // Send to background
+  sendToBackground({
+    type: "CHAT_SEND",
+    pr: currentContext,
+    filePath: hunk.filePath,
+    patchHash: hunk.patchHash,
+    messages: history,
+  });
+}
 
 // ---- SPA navigation monitoring ---------------------------------------------
 
@@ -567,7 +634,31 @@ document.addEventListener("click", (event) => {
       renderCard(domAnchorId, { kind: "loading" });
       sendToBackground({ type: "RETRY_HUNK", pr: currentContext, hunk });
       break;
+
+    case "chat":
+      toggleChatPanel(domAnchorId);
+      break;
+
+    case "chat-send":
+      sendChatMessage(domAnchorId);
+      break;
   }
+});
+
+// Handle Enter key in chat input fields
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  const input = event.target as HTMLElement;
+  if (!input.classList?.contains("prism-chat-panel__input")) return;
+
+  const cardRow = input.closest<HTMLElement>("tr[data-prism-card-for]");
+  if (!cardRow) return;
+
+  const domAnchorId = cardRow.getAttribute("data-prism-card-for");
+  if (!domAnchorId) return;
+
+  event.preventDefault();
+  sendChatMessage(domAnchorId);
 });
 
 // ---- Bootstrap --------------------------------------------------------------

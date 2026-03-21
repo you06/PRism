@@ -13,7 +13,7 @@
 //   5. Job polling — tracks queued/running jobs and pushes updates
 // ---------------------------------------------------------------------------
 
-import type { PrismMessage, DaemonErrorKind } from "./shared.js";
+import type { PrismMessage, DaemonErrorKind, ChatMessage } from "./shared.js";
 import type { PRKey, HunkRef, Annotation } from "./shared.js";
 import { AnnotationCache, cacheKey } from "./background-cache.js";
 import * as api from "./background-api.js";
@@ -313,6 +313,16 @@ chrome.runtime.onMessage.addListener(
       case "RETRY_HUNK":
         handleRetryHunk(tabId, message.pr, message.hunk);
         break;
+
+      case "CHAT_SEND":
+        handleChatSend(
+          tabId,
+          message.pr,
+          message.filePath,
+          message.patchHash,
+          message.messages,
+        );
+        break;
     }
 
     return false;
@@ -372,6 +382,34 @@ function handleRequestVisibleAnnotations(
   const state = getTab(tabId);
   const effectivePr = state.pr ?? pr;
   enqueueHunks(tabId, effectivePr, hunks);
+}
+
+async function handleChatSend(
+  tabId: number,
+  pr: PRKey,
+  filePath: string,
+  patchHash: string,
+  messages: ChatMessage[],
+): Promise<void> {
+  const state = getTab(tabId);
+  const effectivePr = state.pr ?? pr;
+
+  try {
+    const response = await api.sendChatMessage(effectivePr, filePath, patchHash, messages);
+    sendToTab(tabId, {
+      type: "CHAT_REPLY",
+      patchHash,
+      reply: response.reply,
+      model: response.model,
+    });
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : "Chat request failed";
+    sendToTab(tabId, {
+      type: "CHAT_ERROR",
+      patchHash,
+      error: errorMsg,
+    });
+  }
 }
 
 function handleRetryHunk(tabId: number, pr: PRKey, hunk: HunkRef): void {
