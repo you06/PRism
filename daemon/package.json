@@ -1,6 +1,6 @@
 {
   "name": "prism-code-review",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "AI-powered code review assistant — generates hunk-level summaries for GitHub PRs",
   "type": "module",
   "main": "dist/index.js",
@@ -20,7 +20,7 @@
     "clean": "rm -rf dist",
     "smoke-test": "tsx src/smoke-test.ts",
     "build:bin": "bun build src/cli.ts --compile --outfile ../prism",
-    "prepublishOnly": "cd ../shared && rm -f tsconfig.tsbuildinfo && npx tsc -p tsconfig.json && cd ../daemon && npm run clean && npm run build:bundle"
+    "prepublishOnly": "cd ../shared && rm -f tsconfig.tsbuildinfo && npx tsc -p tsconfig.json && cd ../daemon && npm run clean && npm run build:bundle && cp ../README.md ."
   },
   "keywords": [
     "code-review",
