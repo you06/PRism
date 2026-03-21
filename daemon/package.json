@@ -1,6 +1,6 @@
 {
   "name": "prism-code-review",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI-powered code review assistant — generates hunk-level summaries for GitHub PRs",
   "type": "module",
   "main": "dist/index.js",
