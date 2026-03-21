@@ -15,6 +15,7 @@ import {
   handleCreateJob,
   handleGetJob,
   handleGetAnnotations,
+  handleChat,
   json,
   type RouteContext,
 } from "./routes.js";
@@ -61,7 +62,7 @@ export function createDaemon(): DaemonInstance {
       const body: HealthResponse = {
         ok: true,
         version: VERSION,
-        capabilities: ["query", "jobs", "cache"],
+        capabilities: ["query", "jobs", "cache", "chat"],
       };
       return json(res, 200, body);
     }
@@ -84,6 +85,14 @@ export function createDaemon(): DaemonInstance {
 
     if (method === "POST" && pathname === "/v1/analysis/jobs") {
       handleCreateJob(req, res, ctx).catch(() => {
+        if (!res.headersSent)
+          json(res, 500, { error: "Internal server error.", code: "INTERNAL_ERROR" });
+      });
+      return;
+    }
+
+    if (method === "POST" && pathname === "/v1/chat") {
+      handleChat(req, res, ctx).catch(() => {
         if (!res.headersSent)
           json(res, 500, { error: "Internal server error.", code: "INTERNAL_ERROR" });
       });

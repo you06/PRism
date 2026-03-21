@@ -24,9 +24,11 @@ import type {
   CreateJobResponse,
   GetJobResponse,
   GetAnnotationsResponse,
+  ChatResponse,
   ApiErrorResponse,
   PRKey,
   HunkRef,
+  ChatMessage,
   AnalysisJob,
   Annotation,
 } from "@prism/shared";
@@ -50,6 +52,7 @@ import {
   validateVisibleHunks,
   validateHunkTargets,
 } from "./validation.js";
+import { runChat } from "./chat-handler.js";
 
 // ---- Route context (injected from index.ts) ---------------------------------
 
@@ -542,6 +545,104 @@ async function processJob(
   ctx.jobs.update(jobId, {
     status: failed === targets.length ? "failed" : "completed",
   });
+}
+
+// ---- POST /v1/chat ----------------------------------------------------------
+
+export async function handleChat(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  ctx: RouteContext,
+): Promise<void> {
+  const raw = await readBody(req);
+  const parsed = parseJsonBody(raw);
+  if (!parsed.ok) {
+    return apiError(res, 400, "BAD_REQUEST", "Invalid JSON body.");
+  }
+  const body = parsed.value as Record<string, unknown>;
+
+  // Validate required fields
+  const prErr = validatePRKeyWithSha(body["pr"]);
+  if (prErr) {
+    return apiError(res, 400, "BAD_REQUEST", `${prErr.field}: ${prErr.message}`);
+  }
+  if (typeof body["filePath"] !== "string" || !body["filePath"]) {
+    return apiError(res, 400, "BAD_REQUEST", "filePath: required string");
+  }
+  if (typeof body["patchHash"] !== "string" || !body["patchHash"]) {
+    return apiError(res, 400, "BAD_REQUEST", "patchHash: required string");
+  }
+  if (!Array.isArray(body["messages"]) || body["messages"].length === 0) {
+    return apiError(res, 400, "BAD_REQUEST", "messages: required non-empty array");
+  }
+
+  const pr = body["pr"] as PRKey;
+  const filePath = body["filePath"] as string;
+  const patchHash = body["patchHash"] as string;
+  const messages = body["messages"] as ChatMessage[];
+  const agent = (body["agent"] as "codex" | "claude") || "codex";
+  const model = body["model"] as string | undefined;
+  const language = (body["language"] as string) || "English";
+
+  // Look up the PR and hunk context
+  let registered;
+  try {
+    registered = await ensureRegistered(pr, ctx);
+  } catch (err) {
+    return handleGitHubError(res, err);
+  }
+
+  const hunk = registered.canonicalHunks.find(
+    (h) => h.filePath === filePath && h.patchHash === patchHash,
+  );
+
+  // Build patch text from canonical hunk (or use empty if not found)
+  let patch = "";
+  if (hunk) {
+    patch = hunk.lines
+      .map((line) => {
+        const prefix = line.type === "add" ? "+" : line.type === "delete" ? "-" : " ";
+        return prefix + line.content;
+      })
+      .join("\n");
+  }
+
+  // Look up existing annotation for extra context
+  const existingAnnotation = ctx.annotations.get(
+    registered.prKey.headSha,
+    filePath,
+    patchHash,
+  );
+
+  const result = await runChat({
+    promptInput: {
+      prTitle: registered.metadata.title,
+      prDescription: registered.metadata.body,
+      filePath,
+      patch,
+      annotation: existingAnnotation
+        ? {
+            summary: existingAnnotation.summary,
+            impact: existingAnnotation.impact,
+            risk: existingAnnotation.risk,
+          }
+        : undefined,
+      language,
+    },
+    messages,
+    agent,
+    model,
+  });
+
+  if (result.ok) {
+    const response: ChatResponse = {
+      reply: result.reply,
+      model: result.model,
+    };
+    return json(res, 200, response);
+  }
+
+  return apiError(res, 500, "CHAT_FAILED", result.error);
 }
 
 // ---- GitHub error → HTTP response (WORK14: consistent error format) ---------

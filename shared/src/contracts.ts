@@ -90,6 +90,34 @@ export interface GetAnnotationsResponse {
   annotations: Annotation[];
 }
 
+// ---- Chat API (POST /v1/chat) -----------------------------------------------
+
+/** A single message in the chat conversation. */
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** POST /v1/chat — request body */
+export interface ChatRequest {
+  pr: PRKey;
+  filePath: string;
+  patchHash: string;
+  messages: ChatMessage[];
+  /** Agent to use for chat (default: "codex"). */
+  agent?: "codex" | "claude";
+  /** Model override (optional). */
+  model?: string;
+  /** Language for responses (default: "en"). */
+  language?: string;
+}
+
+/** POST /v1/chat — response body */
+export interface ChatResponse {
+  reply: string;
+  model: string;
+}
+
 // ---- Extension internal messages (§10) --------------------------------------
 
 /** Error kinds surfaced by the daemon or API layer to the extension UI. */
@@ -118,6 +146,30 @@ export type PrismMessage =
       retryAfterSec?: number;
       /** patchHashes of hunks affected by this error. Undefined = all hunks. */
       affectedPatchHashes?: string[];
+    }
+  | {
+      /** Sent by content to background to start a chat about a hunk. */
+      type: "CHAT_SEND";
+      pr: PRKey;
+      filePath: string;
+      patchHash: string;
+      messages: ChatMessage[];
+      agent?: "codex" | "claude";
+      model?: string;
+      language?: string;
+    }
+  | {
+      /** Sent by background to content with the chat reply. */
+      type: "CHAT_REPLY";
+      patchHash: string;
+      reply: string;
+      model: string;
+    }
+  | {
+      /** Sent by background to content when a chat request fails. */
+      type: "CHAT_ERROR";
+      patchHash: string;
+      error: string;
     };
 
 // ---- Daemon connection defaults ---------------------------------------------
