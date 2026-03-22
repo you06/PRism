@@ -25,6 +25,11 @@
 // ---------------------------------------------------------------------------
 
 import type { HunkRef } from "./shared.js";
+
+const DEBUG = false;
+function debugLog(...args: unknown[]): void {
+  if (DEBUG) console.log("[PRism]", ...args);
+}
 import {
   normalizeLine,
   computePatchHash,
@@ -383,10 +388,7 @@ export function extractHunks(): HunkRef[] {
   for (const container of fileContainers) {
     const filePath = extractFilePath(container);
     if (!filePath) {
-      console.warn(
-        "[PRism] Could not extract file path from container:",
-        container,
-      );
+      debugLog("Could not extract file path from container:", container);
       continue;
     }
 
@@ -429,9 +431,7 @@ export function extractHunks(): HunkRef[] {
   }
 
   if (results.length > 0) {
-    console.log(
-      `[PRism] Extracted ${results.length} hunks from ${fileContainers.length} files`,
-    );
+    debugLog(`Extracted ${results.length} hunks from ${fileContainers.length} files`);
   }
 
   return results;

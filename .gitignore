@@ -8,5 +8,8 @@ dist/
 # pnpm
 .pnpm-store/
 
+# TypeScript incremental build info
+*.tsbuildinfo
+
 # Compiled binary
 prism
