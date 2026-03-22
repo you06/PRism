@@ -11,7 +11,7 @@ PRism 是一个个人 GitHub code review 助手。
 
 ## 3 分钟快速开始
 
-### 方式 A：安装（推荐）
+### 安装
 
 **1) 安装 CLI：**
 
@@ -34,25 +34,11 @@ prism review 42 --agent claude     # 使用 claude
 prism review 42 --model gpt-4.1   # 指定模型
 prism review 42 --lang cn         # 用简体中文输出摘要
 prism review 42 --lang jp         # 用日语输出摘要
-prism review owner/repo#42        # review 指定仓库的 PR
-prism server                       # 仅启动 daemon（不分析）
 ```
 
 `prism review` 默认使用 `--lang en`。支持的值有 `en`、`cn` 和 `jp`。
 
 打开任意 GitHub PR **Files changed** 页面，即可看到 PRism 卡片出现在 diff hunk 旁边。
-
-### 方式 B：从源码运行
-
-```bash
-pnpm install
-pnpm build
-pnpm --filter @prism/daemon dev
-```
-
-健康检查：`curl http://127.0.0.1:19280/v1/health`
-
-在 `chrome://extensions` 中加载 `extension/` 目录（开发者模式 → 加载已解压的扩展程序）。
 
 ## 前置要求
 

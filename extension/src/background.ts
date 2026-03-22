@@ -19,6 +19,13 @@ import { AnnotationCache, cacheKey } from "./background-cache.js";
 import * as api from "./background-api.js";
 import { PrismApiError } from "./background-api.js";
 
+// ---- Debug -----------------------------------------------------------------
+
+const DEBUG = false;
+function debugLog(...args: unknown[]): void {
+  if (DEBUG) console.log("[PRism:bg]", ...args);
+}
+
 // ---- Cache -----------------------------------------------------------------
 
 const cache = new AnnotationCache(30_000); // 30s TTL
@@ -213,7 +220,7 @@ function startJobPolling(tabId: number, pr: PRKey, jobId: string): void {
     timer: setInterval(() => pollJob(jobId), JOB_POLL_INTERVAL_MS),
   };
   activeJobs.set(jobId, job);
-  console.log(`[PRism:bg] Started polling job ${jobId}`);
+  debugLog(`Started polling job ${jobId}`);
 }
 
 async function pollJob(jobId: string): Promise<void> {
@@ -241,7 +248,7 @@ async function pollJob(jobId: string): Promise<void> {
 
     // Terminal state — stop polling
     if (status.status === "completed" || status.status === "failed") {
-      console.log(`[PRism:bg] Job ${jobId} finished: ${status.status}`);
+      debugLog(`Job ${jobId} finished: ${status.status}`);
 
       if (status.status === "completed") {
         // Use current tab state's PR (has canonical SHAs) instead of job's stored PR
@@ -332,8 +339,8 @@ chrome.runtime.onMessage.addListener(
 // ---- Message handlers ------------------------------------------------------
 
 function handlePRContextUpdated(tabId: number, pr: PRKey): void {
-  console.log(
-    `[PRism:bg] PR context updated tab=${tabId}:`,
+  debugLog(
+    `PR context updated tab=${tabId}:`,
     `${pr.owner}/${pr.repo}#${pr.pullNumber}`,
   );
 

@@ -82,10 +82,6 @@ function printUsage(): void {
   console.log(
     "  prism review <pr_number> [--agent codex|claude] [--model <model>] [--lang en|cn|jp]",
   );
-  console.log(
-    "  prism review owner/repo#<pr_number> [--agent codex|claude] [--model <model>] [--lang en|cn|jp]",
-  );
-  console.log("  prism server                          — start daemon only");
   process.exit(1);
 }
 
@@ -99,24 +95,13 @@ interface ReviewArgs {
 }
 
 function parseReviewTarget(target: string): { owner: string; repo: string; pullNumber: number } {
-  // owner/repo#123
-  const explicitMatch = target.match(/^([^/]+)\/([^#]+)#(\d+)$/);
-  if (explicitMatch) {
-    return {
-      owner: explicitMatch[1],
-      repo: explicitMatch[2],
-      pullNumber: parseInt(explicitMatch[3], 10),
-    };
-  }
-
-  // plain number
   const num = parseInt(target, 10);
   if (!isNaN(num) && num > 0 && String(num) === target) {
     const { owner, repo } = inferOwnerRepo();
     return { owner, repo, pullNumber: num };
   }
 
-  console.error(`Error: invalid PR target "${target}". Use a number or owner/repo#number.`);
+  console.error(`Error: invalid PR target "${target}". Use a PR number (e.g. 42).`);
   process.exit(1);
 }
 

@@ -31,13 +31,17 @@ import {
   type CardState,
 } from "./annotation-card.js";
 
+// ---- Debug -----------------------------------------------------------------
+
+const DEBUG = false;
+function debugLog(...args: unknown[]): void {
+  if (DEBUG) console.log("[PRism]", ...args);
+}
+
 // ---- State -----------------------------------------------------------------
 
 /** Current PR context, or null if not on a PR Changes page. */
 let currentContext: PRKey | null = null;
-
-/** Cleanup function for the navigation monitor (kept for future teardown). */
-let cleanupNavMonitor: (() => void) | null = null;
 
 /** All hunks extracted from the current page. */
 let extractedHunks: HunkRef[] = [];
@@ -189,8 +193,8 @@ function reExtractHunks(): void {
     if (!changed) return;
   }
 
-  console.log(
-    `[PRism] Re-extraction: ${extractedHunks.length} → ${newHunks.length} hunks`,
+  debugLog(
+    `Re-extraction: ${extractedHunks.length} → ${newHunks.length} hunks`,
   );
 
   extractedHunks = newHunks;
@@ -224,7 +228,7 @@ function bootstrapHunkTracking(): void {
 
       extractedHunks = extractHunks();
       if (extractedHunks.length > 0) {
-        console.log('[PRism] Found', extractedHunks.length, 'hunks on retry', retryIndex + 1);
+        debugLog('Found', extractedHunks.length, 'hunks on retry', retryIndex + 1);
         setupHunkObserver();
         notifyVisibleHunks();
         return;
@@ -290,7 +294,7 @@ function checkPage(): void {
     const shortSha = (sha: string) =>
       sha ? sha.slice(0, 8) + "..." : "(pending)";
 
-    console.log("[PRism] PR context updated:", {
+    debugLog("PR context updated:", {
       owner: newContext.owner,
       repo: newContext.repo,
       pullNumber: newContext.pullNumber,
@@ -306,10 +310,10 @@ function checkPage(): void {
     });
 
     if (!previousContext) {
-      console.log("[PRism] Bootstrapping on PR Changes page");
+      debugLog("Bootstrapping on PR Changes page");
     } else if (previousContext.headSha && newContext.headSha &&
                previousContext.headSha !== newContext.headSha) {
-      console.log("[PRism] headSha changed — new commits or force push detected");
+      debugLog("headSha changed — new commits or force push detected");
     }
 
     // Bootstrap hunk extraction after DOM settles.
@@ -320,7 +324,7 @@ function checkPage(): void {
       }
     }, 800);
   } else if (previousContext) {
-    console.log("[PRism] Left PR Changes page — PRism inactive");
+    debugLog("Left PR Changes page — PRism inactive");
   }
 }
 
@@ -371,7 +375,7 @@ function handleDaemonError(
   _retryAfterSec?: number,
   affectedPatchHashes?: string[],
 ): void {
-  console.log(`[PRism] Daemon error (${errorKind}) — hiding affected cards`);
+  debugLog(`Daemon error (${errorKind}) — hiding affected cards`);
 
   if (errorKind === "offline") {
     // Daemon went offline — keep already-ready cards (data is still valid),
@@ -478,8 +482,8 @@ chrome.runtime.onMessage.addListener(
           handleAnnotationsUpdated(message.annotations);
           break;
         case "JOB_STATUS_UPDATED":
-          console.log(
-            `[PRism] Job ${message.jobId}: ${message.status} (${message.completed}/${message.total})`,
+          debugLog(
+            `Job ${message.jobId}: ${message.status} (${message.completed}/${message.total})`,
           );
           if (message.status === "completed") {
             // Job finished — re-request visible hunks to pick up fresh annotations
@@ -770,7 +774,7 @@ document.addEventListener("keydown", (event) => {
 // ---- Bootstrap --------------------------------------------------------------
 
 function bootstrap(): void {
-  console.log("[PRism] Content script loaded");
+  debugLog("Content script loaded");
 
   // Initial page check
   checkPage();
@@ -783,10 +787,7 @@ function bootstrap(): void {
   }
 
   // Monitor SPA navigation for the lifetime of this content script.
-  cleanupNavMonitor = setupNavigationMonitor(checkPage);
-
-  // Prevent unused-variable warning; cleanup is kept for future teardown.
-  void cleanupNavMonitor;
+  setupNavigationMonitor(checkPage);
 }
 
 // WORK14: panic-free bootstrap — extension errors must never break GitHub pages.
